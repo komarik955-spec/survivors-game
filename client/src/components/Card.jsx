@@ -91,8 +91,9 @@ function root(small) {
     background: 'var(--surface)',
     border: '1px solid var(--border)',
     overflow: 'hidden',
+    width: '100%',
     height: '100%',
-    position: 'relative',
+    boxSizing: 'border-box',
   };
 }
 

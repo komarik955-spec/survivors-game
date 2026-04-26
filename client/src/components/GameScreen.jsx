@@ -369,17 +369,14 @@ const s = {
   panelTitle: { fontFamily: 'var(--font-head)', fontSize: 11, letterSpacing: '0.22em', color: 'var(--text-dim)' },
   panelMeta:  { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--amber)' },
 
-  // карты — 6 в ряд, высота фиксирована
+  // карты — 6 в ряд
   cardsRow: {
     display: 'grid',
     gridTemplateColumns: 'repeat(6, 1fr)',
     gap: 10,
   },
   cardCell: {
-    // Поддерживаем пропорцию 130:180 ≈ 0.72
-    position: 'relative',
-    paddingBottom: '138.5%',   // 180/130 * 100
-    height: 0,
+    height: 200,
   },
 
   // нижняя сетка
