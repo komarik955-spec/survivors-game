@@ -19,23 +19,20 @@ export default function GameScreen({
 }) {
   const [chatInput, setChatInput] = useState('');
   const [showCat, setShowCat]     = useState(true);
-  const chatRef = useRef(null);
+  const chatRef  = useRef(null);
   const inputRef = useRef(null);
 
-  const me           = players.find(p => p.id === playerId);
+  const me              = players.find(p => p.id === playerId);
   const openedThisRound = me?.cardsOpenedThisRound ?? 0;
-  const alivePlayers = players.filter(p => p.status === 'alive');
-  const deadPlayers  = players.filter(p => p.status !== 'alive');
-
-  const urgentTimer  = timer !== null && timer <= 20;
-  const forceNeeded  = forceVote?.needed || 0;
-  const forceCount   = forceVote?.count  || 0;
-  const iForceVoted  = forceVote?.requesters?.includes(playerId);
+  const alivePlayers    = players.filter(p => p.status === 'alive');
+  const deadPlayers     = players.filter(p => p.status !== 'alive');
+  const urgentTimer     = timer !== null && timer <= 20;
+  const forceNeeded     = forceVote?.needed || 0;
+  const forceCount      = forceVote?.count  || 0;
+  const iForceVoted     = forceVote?.requesters?.includes(playerId);
 
   useEffect(() => {
-    if (chatRef.current) {
-      chatRef.current.scrollTop = chatRef.current.scrollHeight;
-    }
+    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages]);
 
   useEffect(() => {
@@ -51,131 +48,129 @@ export default function GameScreen({
     inputRef.current?.focus();
   };
 
-  const handleChatKey = (e) => {
+  const onKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
   };
 
-  const formatTime = (s) => {
+  const fmt = (s) => {
     if (s === null || s === undefined) return '--:--';
-    const m = Math.floor(s / 60);
-    const sec = s % 60;
-    return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`;
   };
 
-  // ─── СПЛЭШ КАТАСТРОФЫ ──────────────────────────────
+  // ─── СПЛЭШ КАТАСТРОФЫ ────────────────────────────────
   if (showCat && catastrophe) {
     return (
-      <div style={s.catSplash} onClick={() => setShowCat(false)}>
-        <div style={s.catContent} className="slide-up">
-          <span style={s.catIcon}>{catastrophe.icon}</span>
-          <div style={s.catLabel}>КАТАСТРОФА</div>
-          <h2 style={s.catName}>{catastrophe.name}</h2>
-          <p style={s.catTagline}>«{catastrophe.tagline}»</p>
-          <p style={s.catDesc}>{catastrophe.description}</p>
-          <div style={s.catConditions}>
+      <div style={sp.root} onClick={() => setShowCat(false)}>
+        <div style={sp.box} className="slide-up">
+          <span style={sp.icon}>{catastrophe.icon}</span>
+          <div style={sp.label}>КАТАСТРОФА</div>
+          <h2 style={sp.name}>{catastrophe.name}</h2>
+          <p style={sp.tagline}>«{catastrophe.tagline}»</p>
+          <p style={sp.desc}>{catastrophe.description}</p>
+          <div style={sp.conds}>
             {(catastrophe.conditions || []).map((c, i) => (
-              <div key={i} style={s.catCond}>
-                <span style={s.catCondBullet}>▶</span>
+              <div key={i} style={sp.cond}>
+                <span style={{ color: 'var(--amber)', flexShrink: 0 }}>▶</span>
                 <span>{c}</span>
               </div>
             ))}
           </div>
-          <div style={s.catHint}>Нажми чтобы продолжить</div>
+          <div style={sp.hint}>Нажми чтобы продолжить</div>
         </div>
       </div>
     );
   }
 
+  // ─── ОСНОВНОЙ ЭКРАН ───────────────────────────────────
   return (
     <div style={s.root}>
-      {/* ─── ШАПКА ─── */}
-      <div style={s.topBar}>
-        <div style={s.topLeft}>
-          <span style={s.roundLabel}>РАУНД</span>
-          <span style={s.roundNum}>{round}</span>
+
+      {/* ══ ШАПКА ══ */}
+      <div style={s.bar}>
+        <div style={s.barCell}>
+          <span style={s.barSmall}>РАУНД</span>
+          <span style={s.barBig}>{round}</span>
         </div>
 
-        <div style={s.timerBlock}>
-          <div className={`timer-ring ${urgentTimer ? 'urgent' : ''}`}>
-            {formatTime(timer)}
-          </div>
-          <div style={s.timerPhase}>
+        <div style={s.barMid}>
+          <div className={`timer-ring ${urgentTimer ? 'urgent' : ''}`}>{fmt(timer)}</div>
+          <div style={s.barPhase}>
             {timerPhase === 'discussion' ? 'ОБСУЖДЕНИЕ' : timerPhase === 'voting' ? 'ГОЛОСОВАНИЕ' : ''}
           </div>
         </div>
 
-        <div style={s.topRight}>
-          <span style={s.survivorLabel}>ВЫЖИВЁТ</span>
-          <span style={s.survivorNum}>{survivorsTarget}</span>
+        <div style={{ ...s.barCell, alignItems: 'flex-end' }}>
+          <span style={s.barSmall}>ВЫЖИВЁТ</span>
+          <span style={{ ...s.barBig, color: 'var(--green)' }}>{survivorsTarget}</span>
         </div>
       </div>
 
-      {/* ─── КАТАСТРОФА BADGE ─── */}
-      {catastrophe && (
-        <button style={s.catBadge} onClick={() => setShowCat(true)}>
-          <span>{catastrophe.icon}</span>
-          <span style={s.catBadgeText}>{catastrophe.name}</span>
-        </button>
-      )}
-
-      {/* ─── ОСНОВНАЯ ПАНЕЛЬ ─── */}
-      <div style={s.main}>
-        {/* ЛЕВАЯ: Мои карты + игроки */}
-        <div style={s.leftCol}>
-          {/* Мои карты */}
-          {myCards && (
-            <div style={s.panel}>
-              <div style={s.panelHead}>
-                <span style={s.panelTitle}>МОИ КАРТЫ</span>
-                <span style={s.openedTag}>
-                  {openedThisRound}/2 открыто в раунде
-                </span>
-              </div>
-              <div style={s.cardsGrid}>
-                {CARD_TYPES.map(type => {
-                  const isOpen = !!(me?.openedCards?.[type]);
-                  const canOpen = isAlive && !isOpen && openedThisRound < 2;
-                  return (
-                    <div key={type} style={{ height: 180 }}>
-                      <Card
-                        type={type}
-                        value={me?.openedCards?.[type] || myCards[type]}
-                        isOpen={isOpen}
-                        canOpen={canOpen}
-                        onOpen={onOpenCard}
-                      />
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Принудительное голосование */}
-          {isAlive && (
-            <div style={s.forceVoteBlock}>
-              <button
-                className={iForceVoted ? 'btn-ghost' : 'btn-danger'}
-                style={s.forceBtn}
-                onClick={onForceVoting}
-                disabled={iForceVoted}
-              >
-                {iForceVoted ? `✓ ТЫ ПРОГОЛОСОВАЛ ЗА ГОЛОСОВАНИЕ` : '⚡ НАЧАТЬ ГОЛОСОВАНИЕ РАНЬШЕ'}
-              </button>
-              {forceNeeded > 0 && (
-                <span style={s.forceHint}>{forceCount} / {forceNeeded} нужно</span>
-              )}
-            </div>
+      {/* ══ СУББАР ══ */}
+      <div style={s.subBar}>
+        {catastrophe && (
+          <button style={s.catChip} onClick={() => setShowCat(true)}>
+            {catastrophe.icon}
+            <span style={s.catChipText}>{catastrophe.name}</span>
+          </button>
+        )}
+        <div style={s.subBarRight}>
+          <span style={s.subBarStat}>
+            <span style={{ color: 'var(--green)' }}>●</span> {alivePlayers.length} живых
+          </span>
+          {deadPlayers.length > 0 && (
+            <span style={s.subBarStat}>
+              <span style={{ color: 'var(--red)' }}>✕</span> {deadPlayers.length} выбыли
+            </span>
           )}
         </div>
+      </div>
 
-        {/* ПРАВАЯ: Список игроков + чат */}
-        <div style={s.rightCol}>
-          {/* Живые игроки */}
+      {/* ══ ТЕЛО ══ */}
+      <div style={s.body}>
+
+        {/* ── МОИ КАРТЫ ── */}
+        {myCards && (
+          <div style={s.panel}>
+            <div style={s.panelHead}>
+              <span style={s.panelTitle}>МОИ КАРТЫ</span>
+              <span style={s.panelMeta}>
+                {openedThisRound}/2 открыто в раунде
+                {openedThisRound >= 2 && (
+                  <span style={{ color: 'var(--red)', marginLeft: 8 }}>лимит исчерпан</span>
+                )}
+              </span>
+            </div>
+            {/* 6 карт в ряд — занимают всю ширину */}
+            <div style={s.cardsRow}>
+              {CARD_TYPES.map(type => {
+                const isRevealed = !!(me?.openedCards?.[type]);
+                const canReveal  = isAlive && !isRevealed && openedThisRound < 2;
+                return (
+                  <div key={type} style={s.cardCell}>
+                    <Card
+                      type={type}
+                      value={myCards[type]}
+                      isRevealed={isRevealed}
+                      showOwner={true}
+                      canReveal={canReveal}
+                      onReveal={onOpenCard}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── НИЖНЯЯ СЕТКА: игроки + чат ── */}
+        <div style={s.grid2}>
+
+          {/* ИГРОКИ */}
           <div style={s.panel}>
             <div style={s.panelHead}>
               <span style={s.panelTitle}>ЖИВЫЕ — {alivePlayers.length}</span>
             </div>
+
             <div style={s.playersList}>
               {alivePlayers.map(p => {
                 const isMe = p.id === playerId;
@@ -185,7 +180,7 @@ export default function GameScreen({
                     borderColor: isMe ? 'var(--amber)' : 'var(--border)',
                     background:  isMe ? 'var(--amber-glow)' : 'transparent',
                   }}>
-                    <div style={s.pLeft}>
+                    <div style={s.pTop}>
                       <span style={{
                         ...s.pName,
                         color: isMe ? 'var(--amber)' : 'var(--text-bright)',
@@ -193,66 +188,76 @@ export default function GameScreen({
                         {p.name}
                         {isMe && <span style={s.meTag}> (вы)</span>}
                       </span>
-                      {Object.entries(p.openedCards || {}).length > 0 && (
-                        <div style={s.pCards}>
-                          {Object.entries(p.openedCards).map(([type, val]) => (
-                            <span key={type} style={s.pCardPill}>
-                              {CARD_LABELS[type]}: <b>{val?.name}</b>
-                            </span>
-                          ))}
-                        </div>
-                      )}
+                      <span style={s.pCount}>{p.cardsOpenedThisRound ?? 0}/2</span>
                     </div>
-                    <div style={s.pRight}>
-                      <span style={s.pCardCount}>
-                        {p.cardsOpenedThisRound ?? 0}/2
-                      </span>
-                    </div>
+                    {Object.entries(p.openedCards || {}).length > 0 && (
+                      <div style={s.pPills}>
+                        {Object.entries(p.openedCards).map(([type, val]) => (
+                          <span key={type} style={s.pPill}>
+                            {CARD_LABELS[type]}: <b>{val?.name}</b>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
+            {/* Выбывшие */}
+            {deadPlayers.length > 0 && (
+              <div style={s.deadList}>
+                <span style={{ ...s.panelTitle, color: 'var(--red)', marginBottom: 4 }}>
+                  ВЫБЫЛИ
+                </span>
+                {deadPlayers.map(p => (
+                  <span key={p.id} style={s.deadPill}>✕ {p.name}</span>
+                ))}
+              </div>
+            )}
+
+            {/* Принудительное голосование */}
+            {isAlive && (
+              <div style={{ marginTop: 'auto', paddingTop: 10 }}>
+                <button
+                  className={iForceVoted ? 'btn-ghost' : 'btn-danger'}
+                  style={s.forceBtn}
+                  onClick={onForceVoting}
+                  disabled={iForceVoted}
+                >
+                  {iForceVoted
+                    ? `✓ ЗА ГОЛОСОВАНИЕ  ${forceCount} / ${forceNeeded}`
+                    : `⚡ НАЧАТЬ ГОЛОСОВАНИЕ  ${forceCount} / ${forceNeeded}`}
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Выбывшие */}
-          {deadPlayers.length > 0 && (
-            <div style={s.panel}>
-              <div style={s.panelHead}>
-                <span style={{ ...s.panelTitle, color: 'var(--red)' }}>
-                  ВЫБЫЛИ — {deadPlayers.length}
-                </span>
-              </div>
-              {deadPlayers.map(p => (
-                <div key={p.id} style={s.deadRow}>
-                  <span style={s.deadIcon}>✕</span>
-                  <span style={s.deadName}>{p.name}</span>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Чат */}
-          <div style={s.chatPanel}>
+          {/* ЧАТ */}
+          <div style={s.panel}>
             <div style={s.panelHead}>
               <span style={s.panelTitle}>ЧАТ</span>
-              {!isAlive && <span style={s.spectatorTag}>ТОЛЬКО ЧТЕНИЕ</span>}
+              {!isAlive && <span style={s.spectTag}>ТОЛЬКО ЧТЕНИЕ</span>}
             </div>
-            <div ref={chatRef} style={s.chatMessages}>
+
+            <div ref={chatRef} style={s.chatBox}>
               {messages.length === 0 && (
                 <span style={s.chatEmpty}>Пока тихо… начните обсуждение</span>
               )}
               {messages.map(msg => (
                 <div key={msg.id} style={{
                   ...s.chatMsg,
-                  background: msg.playerId === playerId ? 'rgba(240,165,0,0.07)' : 'transparent',
+                  background: msg.playerId === playerId
+                    ? 'rgba(240,165,0,0.07)' : 'transparent',
                 }}>
                   <span style={s.chatName}>{msg.playerName}</span>
                   <span style={s.chatText}>{msg.text}</span>
                 </div>
               ))}
             </div>
+
             {isAlive && (
-              <div style={s.chatInputRow}>
+              <div style={s.chatRow}>
                 <input
                   ref={inputRef}
                   style={s.chatInput}
@@ -260,230 +265,188 @@ export default function GameScreen({
                   value={chatInput}
                   maxLength={280}
                   onChange={e => setChatInput(e.target.value)}
-                  onKeyDown={handleChatKey}
+                  onKeyDown={onKey}
                 />
                 <button
                   className="btn-primary"
                   style={s.chatSend}
                   onClick={sendChat}
                   disabled={!chatInput.trim()}
-                >
-                  ▶
-                </button>
+                >▶</button>
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* ВСТРОЕННЫЕ МЕДИА-ЗАПРОСЫ ДЛЯ МОБИЛЬНЫХ УСТРОЙСТВ */}
-      <style>{`
-        @media (max-width: 680px) {
-          div[style*="flex: 1"][style*="overflow: auto"] {
-            flex-direction: column !important;
-          }
-          div[style*="borderRight: 1px solid var(--border)"] {
-            border-right: none !important;
-            border-bottom: 1px solid var(--border) !important;
-            width: 100% !important;
-            min-width: auto !important;
-          }
-        }
-      `}</style>
+        </div>{/* /grid2 */}
+      </div>{/* /body */}
     </div>
   );
 }
 
-// ─── СТИЛИ ─────────────────────────────────────────────
+// ══════════════════════════════════════════════════════
+//  СТИЛИ
+// ══════════════════════════════════════════════════════
+
+const sp = {
+  root: {
+    position: 'fixed', inset: 0, zIndex: 9999,
+    background: 'rgba(0,0,0,0.93)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', backdropFilter: 'blur(4px)',
+  },
+  box: {
+    maxWidth: 460, width: '90%',
+    background: 'var(--surface)', border: '1px solid var(--amber)',
+    padding: '36px 32px',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+    textAlign: 'center',
+  },
+  icon:    { fontSize: 52, lineHeight: 1 },
+  label:   { fontFamily: 'var(--font-head)', fontSize: 10, letterSpacing: '0.3em', color: 'var(--text-dim)' },
+  name:    { fontFamily: 'var(--font-head)', fontSize: 34, fontWeight: 700, color: 'var(--amber)', letterSpacing: '0.08em', textShadow: '0 0 30px rgba(240,165,0,0.5)' },
+  tagline: { fontFamily: 'var(--font-mono)', fontSize: 13, fontStyle: 'italic', color: 'var(--text)', lineHeight: 1.5 },
+  desc:    { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.6 },
+  conds:   { width: '100%', display: 'flex', flexDirection: 'column', gap: 6 },
+  cond: {
+    display: 'flex', gap: 8, textAlign: 'left',
+    background: 'var(--surface2)', border: '1px solid var(--border)',
+    padding: '7px 10px',
+    fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)',
+  },
+  hint: { marginTop: 6, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' },
+};
+
 const s = {
   root: {
     minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    background: 'var(--bg)',
+    display: 'flex', flexDirection: 'column',
+    background: 'var(--bg)', overflow: 'auto',
   },
 
-  // CAT SPLASH
-  catSplash: {
-    position: 'fixed', inset: 0, zIndex: 9999,
-    background: 'rgba(0,0,0,0.92)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer',
-    backdropFilter: 'blur(4px)',
-  },
-  catContent: {
-    maxWidth: 480, width: '90%',
-    background: 'var(--surface)',
-    border: '1px solid var(--amber)',
-    padding: '40px 40px',
-    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
-    textAlign: 'center',
-  },
-  catIcon: { fontSize: 56, lineHeight: 1 },
-  catLabel: {
-    fontFamily: 'var(--font-head)', fontSize: 11, letterSpacing: '0.3em',
-    color: 'var(--text-dim)',
-  },
-  catName: {
-    fontFamily: 'var(--font-head)', fontSize: 36, fontWeight: 700,
-    color: 'var(--amber)', letterSpacing: '0.08em',
-    textShadow: '0 0 30px rgba(240,165,0,0.5)',
-  },
-  catTagline: { fontFamily: 'var(--font-mono)', fontSize: 14, fontStyle: 'italic', color: 'var(--text)', lineHeight: 1.5 },
-  catDesc:    { fontFamily: 'var(--font-mono)', fontSize: 13, color: 'var(--text-dim)', lineHeight: 1.6 },
-  catConditions: { width: '100%', display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4 },
-  catCond: {
-    display: 'flex', gap: 8, alignItems: 'flex-start',
-    background: 'var(--surface2)', border: '1px solid var(--border)',
-    padding: '8px 12px', textAlign: 'left',
-    fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text)',
-  },
-  catCondBullet: { color: 'var(--amber)', flexShrink: 0 },
-  catHint: { marginTop: 8, color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.1em' },
-
-  // TOP BAR
-  topBar: {
+  // шапка
+  bar: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    padding: '12px 20px',
+    padding: '10px 20px',
     background: 'var(--surface)',
-    borderBottom: '1px solid var(--border)',
+    borderBottom: '2px solid var(--amber)',
     flexShrink: 0,
   },
-  topLeft:       { display: 'flex', flexDirection: 'column', alignItems: 'flex-start' },
-  topRight:      { display: 'flex', flexDirection: 'column', alignItems: 'flex-end' },
-  roundLabel:    { fontFamily: 'var(--font-head)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--text-dim)' },
-  roundNum:      { fontFamily: 'var(--font-head)', fontSize: 28, fontWeight: 700, color: 'var(--text-bright)', lineHeight: 1 },
-  survivorLabel: { fontFamily: 'var(--font-head)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--text-dim)' },
-  survivorNum:   { fontFamily: 'var(--font-head)', fontSize: 28, fontWeight: 700, color: 'var(--green)', lineHeight: 1 },
-  timerBlock:    { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
-  timerPhase:    { fontFamily: 'var(--font-head)', fontSize: 10, letterSpacing: '0.2em', color: 'var(--text-dim)' },
+  barCell:  { display: 'flex', flexDirection: 'column', minWidth: 60 },
+  barSmall: { fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.22em', color: 'var(--text-dim)' },
+  barBig:   { fontFamily: 'var(--font-head)', fontSize: 26, fontWeight: 700, color: 'var(--text-bright)', lineHeight: 1 },
+  barMid:   { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 },
+  barPhase: { fontFamily: 'var(--font-head)', fontSize: 9, letterSpacing: '0.2em', color: 'var(--text-dim)' },
 
-  // CAT BADGE
-  catBadge: {
-    margin: '8px 20px 0',
-    display: 'inline-flex', alignItems: 'center', gap: 8,
-    background: 'var(--amber-glow)', border: '1px solid var(--amber-dim)',
-    padding: '5px 14px', cursor: 'pointer', alignSelf: 'flex-start',
-  },
-  catBadgeText: { fontFamily: 'var(--font-head)', fontSize: 12, letterSpacing: '0.08em', color: 'var(--amber)' },
-
-  // MAIN
-  main: {
-    display: 'flex',
-    flex: 1,
-    gap: 0,
-    overflow: 'auto',
-  },
-  leftCol: {
-    flex: '1 1 280px',
-    minWidth: 240,
-    borderRight: '1px solid var(--border)',
-    display: 'flex', flexDirection: 'column', gap: 0,
-    overflow: 'auto',
-  },
-  cardsGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
-    gap: 8,
-  },
-  rightCol: {
-    flex: 1,
-    display: 'flex', flexDirection: 'column',
-    overflow: 'hidden',
-  },
-
-  // PANEL
-  panel: {
-    borderBottom: '1px solid var(--border)',
-    padding: '14px 16px',
-  },
-  panelHead: {
+  // суббар
+  subBar: {
     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-    marginBottom: 12,
+    padding: '6px 20px',
+    background: 'var(--surface)', borderBottom: '1px solid var(--border)',
+    flexShrink: 0,
   },
-  panelTitle: {
-    fontFamily: 'var(--font-head)', fontSize: 11,
-    letterSpacing: '0.22em', color: 'var(--text-dim)', textTransform: 'uppercase',
+  catChip: {
+    display: 'flex', alignItems: 'center', gap: 7,
+    background: 'var(--amber-glow)', border: '1px solid var(--amber-dim)',
+    padding: '4px 12px', cursor: 'pointer',
   },
-  openedTag: {
-    fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--amber)',
+  catChipText: { fontFamily: 'var(--font-head)', fontSize: 12, letterSpacing: '0.06em', color: 'var(--amber)' },
+  subBarRight: { display: 'flex', gap: 16 },
+  subBarStat:  { fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)', display: 'flex', alignItems: 'center', gap: 5 },
+
+  // тело
+  body: {
+    flex: 1, padding: '16px 20px',
+    display: 'flex', flexDirection: 'column', gap: 16,
   },
 
-  // FORCE VOTE
-  forceVoteBlock: {
+  // панель
+  panel: {
+    background: 'var(--surface)', border: '1px solid var(--border)',
     padding: '14px 16px',
-    borderBottom: '1px solid var(--border)',
-    display: 'flex', flexDirection: 'column', gap: 6,
+    display: 'flex', flexDirection: 'column', gap: 10,
   },
-  forceBtn: { width: '100%', padding: '10px', fontSize: 12, letterSpacing: '0.08em', borderRadius: 0 },
-  forceHint: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)', textAlign: 'center' },
+  panelHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  panelTitle: { fontFamily: 'var(--font-head)', fontSize: 11, letterSpacing: '0.22em', color: 'var(--text-dim)' },
+  panelMeta:  { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--amber)' },
 
-  // PLAYER LIST
-  playersList: { display: 'flex', flexDirection: 'column', gap: 4 },
+  // карты — 6 в ряд, высота фиксирована
+  cardsRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(6, 1fr)',
+    gap: 10,
+  },
+  cardCell: {
+    // Поддерживаем пропорцию 130:180 ≈ 0.72
+    position: 'relative',
+    paddingBottom: '138.5%',   // 180/130 * 100
+    height: 0,
+  },
+
+  // нижняя сетка
+  grid2: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: 16,
+    alignItems: 'start',
+  },
+
+  // список игроков
+  playersList: { display: 'flex', flexDirection: 'column', gap: 6 },
   pRow: {
-    display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-    padding: '8px 10px', border: '1px solid', gap: 8,
+    border: '1px solid', padding: '8px 10px',
+    display: 'flex', flexDirection: 'column', gap: 4,
     transition: 'border-color 0.2s',
   },
-  pLeft:  { flex: 1, display: 'flex', flexDirection: 'column', gap: 4 },
-  pRight: { flexShrink: 0 },
-  pName:  { fontFamily: 'var(--font-head)', fontSize: 14, fontWeight: 600, letterSpacing: '0.04em' },
-  meTag:  { color: 'var(--text-dim)', fontSize: 11, fontWeight: 400 },
-  pCards: { display: 'flex', flexWrap: 'wrap', gap: 4 },
-  pCardPill: {
+  pTop:  { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
+  pName: { fontFamily: 'var(--font-head)', fontSize: 15, fontWeight: 600, letterSpacing: '0.04em' },
+  meTag: { color: 'var(--text-dim)', fontSize: 11, fontWeight: 400 },
+  pCount:{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' },
+  pPills:{ display: 'flex', flexWrap: 'wrap', gap: 4 },
+  pPill: {
     fontFamily: 'var(--font-mono)', fontSize: 10,
-    background: 'var(--surface3)', border: '1px solid var(--border)',
+    background: 'var(--surface2)', border: '1px solid var(--border)',
     padding: '2px 6px', color: 'var(--text)',
   },
-  pCardCount: {
-    fontFamily: 'var(--font-mono)', fontSize: 12,
-    color: 'var(--text-dim)',
+
+  // выбывшие
+  deadList: { display: 'flex', flexDirection: 'column', gap: 5, paddingTop: 4 },
+  deadPill: {
+    background: 'rgba(221,51,68,0.07)', border: '1px solid var(--red-dim)',
+    color: 'var(--text-dim)', fontFamily: 'var(--font-head)', fontSize: 12,
+    padding: '3px 10px', textDecoration: 'line-through', display: 'inline-flex',
+    alignSelf: 'flex-start',
   },
 
-  // DEAD
-  deadRow: {
-    display: 'flex', alignItems: 'center', gap: 10,
-    padding: '6px 10px',
-    opacity: 0.5,
-  },
-  deadIcon: { color: 'var(--red)', fontFamily: 'var(--font-mono)', fontSize: 12 },
-  deadName: { fontFamily: 'var(--font-head)', fontSize: 13, color: 'var(--text-dim)', textDecoration: 'line-through' },
+  // форс голосование
+  forceBtn: { width: '100%', padding: '9px', fontSize: 11, letterSpacing: '0.06em', borderRadius: 0 },
 
-  // CHAT
-  chatPanel: {
-    flex: 1, display: 'flex', flexDirection: 'column',
-    overflow: 'hidden',
-    padding: '14px 16px',
-    minHeight: 200,
-  },
-  chatMessages: {
-    flex: 1, overflow: 'auto',
-    display: 'flex', flexDirection: 'column', gap: 2,
-    marginBottom: 8,
-    paddingRight: 4,
+  // чат
+  chatBox: {
+    flex: 1, minHeight: 160, maxHeight: 260,
+    overflowY: 'auto',
+    display: 'flex', flexDirection: 'column', gap: 2, paddingRight: 4,
   },
   chatEmpty: {
     fontFamily: 'var(--font-mono)', fontSize: 12,
-    color: 'var(--text-dim)', fontStyle: 'italic',
-    padding: '12px 0',
+    color: 'var(--text-dim)', fontStyle: 'italic', padding: '8px 0',
   },
   chatMsg: {
     display: 'flex', gap: 8, alignItems: 'baseline',
-    padding: '4px 6px',
+    padding: '3px 5px',
   },
   chatName: {
-    fontFamily: 'var(--font-head)', fontSize: 12,
-    fontWeight: 700, color: 'var(--amber)',
-    flexShrink: 0, letterSpacing: '0.04em',
+    fontFamily: 'var(--font-head)', fontSize: 12, fontWeight: 700,
+    color: 'var(--amber)', flexShrink: 0, letterSpacing: '0.04em',
   },
   chatText: {
     fontFamily: 'var(--font-mono)', fontSize: 13,
     color: 'var(--text)', lineHeight: 1.4, wordBreak: 'break-word',
   },
-  chatInputRow: { display: 'flex', gap: 6, flexShrink: 0 },
-  chatInput: { flex: 1, fontSize: 13, padding: '8px 12px', borderRadius: 0 },
-  chatSend: { padding: '8px 16px', fontSize: 14, borderRadius: 0, flexShrink: 0 },
-  spectatorTag: {
+  chatRow:   { display: 'flex', gap: 6 },
+  chatInput: { flex: 1, fontSize: 13, padding: '7px 10px', borderRadius: 0 },
+  chatSend:  { padding: '7px 14px', fontSize: 14, borderRadius: 0, flexShrink: 0 },
+
+  spectTag: {
     fontFamily: 'var(--font-head)', fontSize: 10,
     letterSpacing: '0.15em', color: 'var(--red)',
     border: '1px solid var(--red-dim)', padding: '2px 8px',

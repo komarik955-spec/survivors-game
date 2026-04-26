@@ -9,127 +9,98 @@ const CARD_META = {
   baggage:    { label: 'БАГАЖ',     icon: '▣', color: '#dd6699' },
 };
 
-export default function Card({ type, value, isOpen, canOpen, onOpen, small }) {
-  const meta  = CARD_META[type] || { label: type, icon: '?', color: '#888' };
-  const size  = small ? { width: 100, height: 140 } : { width: 130, height: 180 };
+/**
+ * Props:
+ *  type        — ключ карты (profession, health, …)
+ *  value       — { name, note }
+ *  isRevealed  — карта раскрыта ВСЕМ (событие уже ушло на сервер)
+ *  showOwner   — я владелец: показывать содержимое только мне (без анимации)
+ *  canReveal   — я могу нажать «показать всем» прямо сейчас
+ *  onReveal    — callback(type) → отправить на сервер
+ *  small       — уменьшенный размер (карты других игроков)
+ */
+export default function Card({
+  type,
+  value,
+  isRevealed = false,
+  showOwner  = false,
+  canReveal  = false,
+  onReveal,
+  small      = false,
+}) {
+  const meta = CARD_META[type] || { label: type, icon: '?', color: '#888' };
+  const color = meta.color;
+
+  // Что показываем в теле карточки
+  const showContent = isRevealed || showOwner;
 
   return (
-    <div
-      className={`card-flip ${isOpen ? 'is-open' : ''}`}
-      style={{ ...size, cursor: (!isOpen && canOpen) ? 'pointer' : 'default' }}
-      onClick={() => { if (!isOpen && canOpen) onOpen(type); }}
-      title={!isOpen && canOpen ? 'Нажми, чтобы открыть' : undefined}
-    >
-      <div className="card-flip-inner">
-        {/* ─── РУБАШКА ─── */}
-        <div className="card-face" style={face(meta.color, small)}>
-          <div style={backPattern(meta.color)} aria-hidden />
-          <div style={backCenter}>
-            <span style={backIcon(meta.color, small)}>{meta.icon}</span>
-            <span style={backLabel(small)}>{meta.label}</span>
-          </div>
-          {canOpen && !isOpen && (
-            <div style={hint}>TAP</div>
-          )}
-        </div>
+    <div style={root(small)}>
 
-        {/* ─── ЛИЦО ─── */}
-        <div className="card-face back" style={faceOpen(meta.color, small)}>
-          <div style={topBar(meta.color)}>
-            <span style={topIcon}>{meta.icon}</span>
-            <span style={topLab(small)}>{meta.label}</span>
-          </div>
-          <div style={cardBody(small)}>
-            <div style={valueTxt(small)}>{value?.name || '—'}</div>
+      {/* ── ВЕРХНЯЯ ПОЛОСКА с типом ── */}
+      <div style={topBar(color, small)}>
+        <span style={topIcon(small)}>{meta.icon}</span>
+        <span style={topLabel(small)}>{meta.label}</span>
+        {isRevealed && <span style={revealedBadge}>ALL</span>}
+      </div>
+
+      {/* ── ТЕЛО ── */}
+      <div style={body(small)}>
+        {showContent ? (
+          <>
+            <div style={valueTxt(small, color)}>{value?.name || '—'}</div>
             {value?.note && (
               <div style={noteTxt(small)}>{value.note}</div>
             )}
+          </>
+        ) : (
+          /* Чужая закрытая карта */
+          <div style={hiddenBlock(color, small)}>
+            <span style={hiddenIcon(color, small)}>{meta.icon}</span>
+            <span style={hiddenLabel(small)}>ЗАСЕКРЕЧЕНО</span>
           </div>
-        </div>
+        )}
       </div>
+
+      {/* ── КНОПКА «ПОКАЗАТЬ ВСЕМ» (только владельцу, не раскрытой) ── */}
+      {showOwner && !isRevealed && (
+        <button
+          style={revealBtn(canReveal)}
+          onClick={() => canReveal && onReveal && onReveal(type)}
+          disabled={!canReveal}
+          title={canReveal ? 'Показать всем игрокам' : 'Лимит 2 карты за раунд'}
+        >
+          {canReveal ? '👁 ПОКАЗАТЬ ВСЕМ' : '🔒 ЛИМИТ'}
+        </button>
+      )}
+
+      {/* ── Статус для уже раскрытых владельцем ── */}
+      {showOwner && isRevealed && (
+        <div style={shownTag}>✓ видят все</div>
+      )}
     </div>
   );
 }
 
 // ─── СТИЛИ ──────────────────────────────────────────
 
-function face(color, small) {
+function root(small) {
   return {
+    display: 'flex',
+    flexDirection: 'column',
     background: 'var(--surface)',
-    border: `1px solid ${color}44`,
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
+    border: '1px solid var(--border)',
+    overflow: 'hidden',
+    height: '100%',
     position: 'relative',
-    overflow: 'hidden',
   };
 }
 
-function backPattern(color) {
+function topBar(color, small) {
   return {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `
-      repeating-linear-gradient(45deg, ${color}08 0, ${color}08 4px, transparent 4px, transparent 20px),
-      repeating-linear-gradient(-45deg, ${color}06 0, ${color}06 4px, transparent 4px, transparent 20px)
-    `,
-  };
-}
-
-const backCenter = {
-  position: 'relative',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  gap: 8,
-};
-
-function backIcon(color, small) {
-  return {
-    fontSize: small ? 22 : 30,
-    color,
-    opacity: 0.7,
-    fontFamily: 'var(--font-mono)',
-  };
-}
-
-function backLabel(small) {
-  return {
-    fontFamily: 'var(--font-head)',
-    fontSize: small ? 8 : 10,
-    color: 'var(--text-dim)',
-    letterSpacing: '0.15em',
-    textAlign: 'center',
-  };
-}
-
-const hint = {
-  position: 'absolute',
-  bottom: 8,
-  right: 8,
-  fontFamily: 'var(--font-head)',
-  fontSize: 8,
-  letterSpacing: '0.1em',
-  color: 'var(--amber)',
-  opacity: 0.7,
-};
-
-function faceOpen(color, small) {
-  return {
-    background: 'var(--surface2)',
-    border: `1px solid ${color}88`,
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  };
-}
-
-function topBar(color) {
-  return {
-    background: color + '22',
+    background: color + '1a',
     borderBottom: `1px solid ${color}44`,
-    padding: '5px 8px',
+    padding: small ? '4px 6px' : '5px 8px',
     display: 'flex',
     alignItems: 'center',
     gap: 5,
@@ -137,39 +108,57 @@ function topBar(color) {
   };
 }
 
-const topIcon = {
-  fontSize: 12,
-  fontFamily: 'var(--font-mono)',
-};
+function topIcon(small) {
+  return {
+    fontSize: small ? 10 : 12,
+    fontFamily: 'var(--font-mono)',
+    flexShrink: 0,
+  };
+}
 
-function topLab(small) {
+function topLabel(small) {
   return {
     fontFamily: 'var(--font-head)',
-    fontSize: small ? 8 : 9,
+    fontSize: small ? 7 : 9,
     letterSpacing: '0.12em',
     color: 'var(--text-dim)',
+    flex: 1,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   };
 }
 
-function cardBody(small) {
+const revealedBadge = {
+  fontFamily: 'var(--font-head)',
+  fontSize: 7,
+  letterSpacing: '0.1em',
+  color: 'var(--green)',
+  border: '1px solid var(--green-dim)',
+  padding: '1px 4px',
+  flexShrink: 0,
+};
+
+function body(small) {
   return {
-    padding: small ? '6px 8px' : '8px 10px',
     flex: 1,
+    padding: small ? '5px 6px' : '8px 10px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 5,
+    gap: 4,
     justifyContent: 'center',
+    overflow: 'hidden',
   };
 }
 
-function valueTxt(small) {
+function valueTxt(small, color) {
   return {
     fontFamily: 'var(--font-head)',
-    fontSize: small ? 11 : 13,
+    fontSize: small ? 10 : 13,
     fontWeight: 600,
     color: 'var(--text-bright)',
     lineHeight: 1.3,
-    letterSpacing: '0.03em',
+    letterSpacing: '0.02em',
   };
 }
 
@@ -182,3 +171,64 @@ function noteTxt(small) {
     fontStyle: 'italic',
   };
 }
+
+function hiddenBlock(color, small) {
+  return {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    flex: 1,
+    padding: '4px',
+    background: `repeating-linear-gradient(45deg, ${color}06 0, ${color}06 4px, transparent 4px, transparent 16px)`,
+  };
+}
+
+function hiddenIcon(color, small) {
+  return {
+    fontSize: small ? 18 : 22,
+    color,
+    opacity: 0.4,
+    fontFamily: 'var(--font-mono)',
+  };
+}
+
+function hiddenLabel(small) {
+  return {
+    fontFamily: 'var(--font-head)',
+    fontSize: small ? 7 : 8,
+    letterSpacing: '0.12em',
+    color: 'var(--text-dim)',
+    textAlign: 'center',
+  };
+}
+
+function revealBtn(canReveal) {
+  return {
+    border: 'none',
+    borderTop: `1px solid ${canReveal ? 'var(--amber)' : 'var(--border)'}`,
+    background: canReveal ? 'rgba(240,165,0,0.1)' : 'var(--surface2)',
+    color: canReveal ? 'var(--amber)' : 'var(--text-dim)',
+    fontFamily: 'var(--font-head)',
+    fontSize: 9,
+    letterSpacing: '0.1em',
+    padding: '6px 4px',
+    cursor: canReveal ? 'pointer' : 'not-allowed',
+    width: '100%',
+    flexShrink: 0,
+    transition: 'background 0.15s',
+  };
+}
+
+const shownTag = {
+  borderTop: '1px solid var(--green-dim)',
+  background: 'rgba(0,204,102,0.07)',
+  color: 'var(--green)',
+  fontFamily: 'var(--font-head)',
+  fontSize: 9,
+  letterSpacing: '0.1em',
+  padding: '5px 4px',
+  textAlign: 'center',
+  flexShrink: 0,
+};
