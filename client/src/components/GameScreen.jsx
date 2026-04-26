@@ -268,7 +268,7 @@ export default function GameScreen({
 }
 
 // ══════════════════════════════════════════════════════
-//  CSS (media queries не работают в inline styles)
+//  CSS
 // ══════════════════════════════════════════════════════
 const CSS = `
 /* ─── ROOT ─── */
@@ -430,6 +430,73 @@ const CSS = `
   }
   .gs-card-cell {
     height: 160px;
+  }
+}
+
+/* Очень узкие телефоны (≤400px) – ещё компактнее */
+@media (max-width: 400px) {
+  .gs-bar {
+    padding: 5px 8px;
+  }
+  .gs-bar-big {
+    font-size: 18px;
+  }
+  .gs-bar-small {
+    font-size: 7px;
+  }
+  .gs-subbar {
+    padding: 4px 8px;
+  }
+  .gs-cat-chip-text {
+    font-size: 9px;
+  }
+  .gs-stat {
+    font-size: 9px;
+  }
+  .gs-panel {
+    padding: 8px 8px;
+  }
+  .gs-panel-title {
+    font-size: 9px;
+  }
+  .gs-cards-grid {
+    gap: 4px;
+  }
+  .gs-card-cell {
+    height: 130px;
+  }
+  .gs-player-name {
+    font-size: 12px;
+  }
+  .gs-player-count {
+    font-size: 9px;
+  }
+  .gs-pill {
+    font-size: 8px;
+  }
+  .gs-chat-name {
+    font-size: 10px;
+  }
+  .gs-chat-text {
+    font-size: 11px;
+  }
+  .gs-chat-input, .gs-chat-send {
+    font-size: 11px;
+    padding: 5px 6px;
+  }
+  .gs-force-btn {
+    font-size: 9px;
+    padding: 6px;
+  }
+  .gs-dead-pill {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+  .gs-splash-box {
+    padding: 20px 16px;
+  }
+  .gs-splash-name {
+    font-size: 24px;
   }
 }
 
