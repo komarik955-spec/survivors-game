@@ -87,9 +87,17 @@ export default function EndScreen({ endData, eliminationData, players, catastrop
         {/* КНОПКИ */}
         <div style={s.footer}>
           {isHost ? (
-            <button className="btn-primary" style={s.resetBtn} onClick={onReset}>
-              НАЧАТЬ НОВУЮ ИГРУ
-            </button>
+            <button 
+  className="btn-primary" 
+  style={s.resetBtn} 
+  onClick={() => {
+    onReset();
+    // Через 1 секунду перезагружаем страницу, чтобы хост точно стал хостом
+    setTimeout(() => window.location.reload(), 1000);
+  }}
+>
+  НАЧАТЬ НОВУЮ ИГРУ
+</button>
           ) : (
             <span style={s.waitHostText}>Ожидаем хоста для новой игры…</span>
           )}
