@@ -90,11 +90,7 @@ export default function EndScreen({ endData, eliminationData, players, catastrop
             <button 
   className="btn-primary" 
   style={s.resetBtn} 
-  onClick={() => {
-    onReset();
-    // Через 1 секунду перезагружаем страницу, чтобы хост точно стал хостом
-    setTimeout(() => window.location.reload(), 1000);
-  }}
+  onClick={() => onReset()}
 >
   НАЧАТЬ НОВУЮ ИГРУ
 </button>
