@@ -136,10 +136,17 @@ export default function App() {
       setG(prev => ({ ...prev, messages: [...prev.messages.slice(-120), msg] }));
     });
 
-    socket.on('gameReset', ({ players }) => {
-      update({ ...INIT, screen: 'lobby', players,
-               playerId: g.playerId, isHost: g.isHost });
-    });
+   socket.on('gameReset', ({ players }) => {
+  // Найти себя в обновлённом списке игроков
+  const me = players.find(p => p.id === g.playerId);
+  update({
+    ...INIT,
+    screen: 'lobby',
+    players,
+    playerId: g.playerId,
+    isHost: me?.isHost || false,   // <- берём isHost из данных, а не из старого состояния
+  });
+});
 
     socket.on('gameError', (msg) => {
       toast(msg, 'error');
