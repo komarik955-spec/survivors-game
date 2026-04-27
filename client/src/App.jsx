@@ -10,7 +10,6 @@ import EndScreen  from './components/EndScreen.jsx';
 import ToastArea  from './components/ToastArea.jsx';
 
 // ─── НАЧАЛЬНОЕ СОСТОЯНИЕ ─────────────────────────────
-
 const INIT = {
   screen:          'login',   // login | lobby | game | voting | result | end
   playerId:        null,
@@ -25,12 +24,12 @@ const INIT = {
   votes:           { hasVoted: [], count: 0, total: 0 },
   forceVote:       { count: 0, needed: 0 },
   messages:        [],
-  eliminationData: null,    // { eliminatedId, eliminatedName, eliminatedCards, voteCounts, tie }
-  endData:         null,    // { survivors }
+  eliminationData: null,
+  endData:         null,
 };
 
 export default function App() {
-  const [g, setG]     = useState(INIT);
+  const [g, setG] = useState(INIT);
   const [toasts, setToasts] = useState([]);
   const toastId = useRef(0);
 
@@ -43,12 +42,10 @@ export default function App() {
   const update = useCallback((patch) => setG(prev => ({ ...prev, ...patch })), []);
 
   // ─── SOCKET EVENTS ────────────────────────────────
-
   useEffect(() => {
-    // Восстановить состояние при реконнекте
     socket.on('currentState', ({ phase, players }) => {
       if (phase !== 'lobby' && phase !== 'ended') {
-        // если игра идёт — показать, что нужно переподключиться
+        // можно показать сообщение, что игра идёт
       }
       update({ players });
     });
@@ -85,8 +82,13 @@ export default function App() {
     });
 
     socket.on('newRound', ({ round, players }) => {
-      update({ round, players, screen: 'game', eliminationData: null,
-               votes: { hasVoted: [], count: 0, total: 0 } });
+      update({
+        round,
+        players,
+        screen: 'game',
+        eliminationData: null,
+        votes: { hasVoted: [], count: 0, total: 0 }
+      });
     });
 
     socket.on('cardOpened', ({ players, playerName, cardType }) => {
@@ -108,7 +110,11 @@ export default function App() {
     });
 
     socket.on('votingStarted', ({ players, total }) => {
-      update({ screen: 'voting', players, votes: { hasVoted: [], count: 0, total } });
+      update({
+        screen: 'voting',
+        players,
+        votes: { hasVoted: [], count: 0, total }
+      });
     });
 
     socket.on('updateVotes', ({ hasVoted, count, total }) => {
@@ -136,17 +142,17 @@ export default function App() {
       setG(prev => ({ ...prev, messages: [...prev.messages.slice(-120), msg] }));
     });
 
-   socket.on('gameReset', ({ players }) => {
-  // Найти себя в обновлённом списке игроков
-  const me = players.find(p => p.id === g.playerId);
-  update({
-    ...INIT,
-    screen: 'lobby',
-    players,
-    playerId: g.playerId,
-    isHost: me?.isHost || false,   // <- берём isHost из данных, а не из старого состояния
-  });
-});
+    // ✅ ИСПРАВЛЕННЫЙ ОБРАБОТЧИК gameReset
+    socket.on('gameReset', ({ players }) => {
+      const me = players.find(p => p.id === g.playerId);
+      setG({
+        ...INIT,
+        screen: 'lobby',
+        players: players,
+        playerId: g.playerId,
+        isHost: me ? me.isHost : false,
+      });
+    });
 
     socket.on('gameError', (msg) => {
       toast(msg, 'error');
@@ -161,40 +167,30 @@ export default function App() {
     });
 
     return () => socket.removeAllListeners();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Пустые зависимости – эффект срабатывает один раз
 
   // ─── ACTIONS ──────────────────────────────────────
-
   const actions = {
     join: (name) => socket.emit('joinGame', { name }),
-
     startGame: (survivorsCount, timerDuration) =>
       socket.emit('startGame', { survivorsCount, timerDuration }),
-
     openCard: (cardType) => socket.emit('openCard', { cardType }),
-
     vote: (targetId) => socket.emit('vote', { targetId }),
-
     requestForceVoting: () => socket.emit('requestForceVoting'),
-
     sendChat: (text) => socket.emit('sendChat', { text }),
-
     resetGame: () => socket.emit('resetGame'),
   };
 
   // ─── RENDER ───────────────────────────────────────
-
   const myPlayer = g.players.find(p => p.id === g.playerId);
-  const isAlive  = myPlayer?.status === 'alive';
+  const isAlive = myPlayer?.status === 'alive';
 
   return (
     <>
       <ToastArea toasts={toasts} />
 
-      {g.screen === 'login' && (
-        <Login onJoin={actions.join} />
-      )}
+      {g.screen === 'login' && <Login onJoin={actions.join} />}
 
       {g.screen === 'lobby' && (
         <Lobby
