@@ -185,9 +185,10 @@ export default function GameScreen({
                       {Object.entries(p.openedCards || {}).length > 0 && (
                         <div className="gs-player-pills">
                           {Object.entries(p.openedCards).map(([type, val]) => (
-                            <span key={type} className="gs-pill">
-                              {CARD_LABELS[type]}: <b>{val?.name}</b>
-                            </span>
+                            <div key={type} className="gs-pill-full">
+                              <div className="gs-pill-title">{CARD_LABELS[type]}: <b>{val?.name}</b></div>
+                              {val?.note && <div className="gs-pill-note">{val.note}</div>}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -268,7 +269,7 @@ export default function GameScreen({
 }
 
 // ══════════════════════════════════════════════════════
-//  CSS
+//  CSS (все стили внутри одной строки)
 // ══════════════════════════════════════════════════════
 const CSS = `
 /* ─── ROOT ─── */
@@ -471,9 +472,6 @@ const CSS = `
   .gs-player-count {
     font-size: 9px;
   }
-  .gs-pill {
-    font-size: 8px;
-  }
   .gs-chat-name {
     font-size: 10px;
   }
@@ -558,16 +556,33 @@ const CSS = `
 }
 .gs-player-pills {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  flex-direction: column;
+  gap: 6px;
 }
-.gs-pill {
-  font-family: var(--font-mono);
-  font-size: 10px;
+
+/* Стиль для полной карточки открытой карты */
+.gs-pill-full {
   background: var(--surface2);
   border: 1px solid var(--border);
-  padding: 2px 6px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.gs-pill-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
   color: var(--text);
+  font-weight: normal;
+}
+.gs-pill-note {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-dim);
+  font-style: italic;
+  border-top: 1px dotted var(--border);
+  padding-top: 4px;
+  margin-top: 2px;
 }
 
 /* ─── ВЫБЫВШИЕ ─── */
