@@ -199,18 +199,38 @@ io.on('connection', (socket) => {
   //  OPEN CARD
   // ──────────────────────────────────
   socket.on('openCard', ({ cardType }) => {
-    const res = handleOpenCard(gameState, socket.id, cardType);
-    if (res.error) { socket.emit('gameError', res.error); return; }
-    gameState = res.state;
+  const res = handleOpenCard(gameState, socket.id, cardType);
+  if (res.error) { socket.emit('gameError', res.error); return; }
+  gameState = res.state;
 
-    io.emit('cardOpened', {
-      playerId:   socket.id,
-      playerName: res.event.playerName,
-      cardType:   res.event.cardType,
-      cardValue:  res.event.cardValue,
-      players:    publicPlayers(gameState),
-    });
+  // 1. Отправляем событие обновления карт (как и раньше)
+  io.emit('cardOpened', {
+    playerId: socket.id,
+    playerName: res.event.playerName,
+    cardType: res.event.cardType,
+    cardValue: res.event.cardValue,
+    players: publicPlayers(gameState),
   });
+
+  // 2. Отправляем системное сообщение в чат (для всех)
+  const labels = {
+    profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
+    fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
+  };
+  const cardLabel = labels[cardType] || cardType;
+  const cardTitle = res.event.cardValue?.name || '?';
+  const cardNote = res.event.cardValue?.note ? ` (${res.event.cardValue.note})` : '';
+  
+  const chatMessage = {
+    id: `system-${Date.now()}`,
+    playerId: 'system',          // специальный ID для системных сообщений
+    playerName: '📢 СИСТЕМА',
+    text: `${res.event.playerName} открыл ${cardLabel}: ${cardTitle}${cardNote}`,
+    ts: Date.now(),
+    isSystem: true,
+  };
+  io.emit('chatMessage', chatMessage);
+});
 
   // ──────────────────────────────────
   //  VOTE
