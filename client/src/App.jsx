@@ -142,15 +142,17 @@ export default function App() {
       setG(prev => ({ ...prev, messages: [...prev.messages.slice(-120), msg] }));
     });
 
-    // ✅ ИСПРАВЛЕННЫЙ ОБРАБОТЧИК gameReset
+    // ✅ ИСПРАВЛЕННЫЙ ОБРАБОТЧИК gameReset – использует prev, чтобы избежать замыкания
     socket.on('gameReset', ({ players }) => {
-      const me = players.find(p => p.id === g.playerId);
-      setG({
-        ...INIT,
-        screen: 'lobby',
-        players: players,
-        playerId: g.playerId,
-        isHost: me ? me.isHost : false,
+      setG(prev => {
+        const me = players.find(p => p.id === prev.playerId);
+        return {
+          ...INIT,
+          screen: 'lobby',
+          players,
+          playerId: prev.playerId,
+          isHost: me ? me.isHost : false,
+        };
       });
     });
 
