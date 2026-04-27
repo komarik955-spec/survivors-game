@@ -91,14 +91,20 @@ export default function App() {
       });
     });
 
-    socket.on('cardOpened', ({ players, playerName, cardType }) => {
-      update({ players });
-      const labels = {
-        profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
-        fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
-      };
-      toast(`${playerName} открыл: ${labels[cardType] || cardType}`, 'card');
-    });
+    socket.on('cardOpened', ({ players, playerName, cardType, cardValue }) => {
+  update({ players });
+  const labels = {
+    profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
+    fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
+  };
+  // Формируем полное сообщение: имя игрока → тип карты → название → заметка
+  const cardTitle = cardValue?.name || '?';
+  const cardNote = cardValue?.note ? ` (${cardValue.note})` : '';
+  toast(
+    `${playerName} открыл ${labels[cardType] || cardType}: ${cardTitle}${cardNote}`,
+    'card'
+  );
+});
 
     socket.on('timerUpdate', ({ remaining, phase }) => {
       update({ timer: remaining, timerPhase: phase });
