@@ -181,15 +181,13 @@ function generateNewRoundEvent(state) {
   let roundEvent = generateRoundEvent(alive);
   
   if (roundEvent) {
-    // Удаляем привязку к игроку
+    // Убираем привязку к конкретным игрокам
     delete roundEvent.targetId;
     delete roundEvent.targetName;
-    // Убираем механический эффект
+    // Убираем любые эффекты, оставляем только информационное событие
     roundEvent.effect = { type: 'none' };
     roundEvent.effectLabel = '';
     roundEvent.effectText = '';
-    // Дополнительно: можно убрать hint (подсказку), если она ещё есть
-    delete roundEvent.hint;
   }
   
   state.roundEvent = roundEvent;

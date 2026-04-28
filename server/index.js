@@ -86,15 +86,18 @@ function startDiscussion() {
   gameState.forceVoteRequests = new Set();
   gameState.players.forEach(p => { p.cardsOpenedThisRound = 0; });
 
-  // Генерируем событие раунда
-  gameState = generateNewRoundEvent(gameState);
-  const roundEvent = gameState.roundEvent;
-  console.log('🎲 roundEvent после генерации:', roundEvent?.title);
+  // Генерируем событие только если его ещё нет (первый раунд)
+  if (!gameState.roundEvent) {
+    gameState = generateNewRoundEvent(gameState);
+    console.log('🎲 Сгенерировано единственное событие:', gameState.roundEvent?.title);
+  } else {
+    console.log('🎲 Событие уже существует, повторно не генерируем');
+  }
 
   io.emit('newRound', {
-    round:      gameState.round,
-    players:    publicPlayers(gameState),
-    roundEvent: roundEvent,
+    round: gameState.round,
+    players: publicPlayers(gameState),
+    roundEvent: gameState.roundEvent,
   });
 
   startCountdown(gameState.timerDuration, 'discussion', startVoting);
