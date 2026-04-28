@@ -181,19 +181,20 @@ function generateNewRoundEvent(state) {
   let roundEvent = generateRoundEvent(alive);
   
   if (roundEvent) {
-    // Удаляем привязку к конкретному игроку и делаем событие чисто информационным
-    roundEvent.effect = { type: 'none' };
-    roundEvent.effectLabel = 'ОБСУЖДЕНИЕ';
-    roundEvent.effectText = 'Событие не влияет на голосование — игроки сами решают, кому доверять';
-    // Удаляем поля с именами (на всякий случай)
+    // Удаляем привязку к игроку
     delete roundEvent.targetId;
     delete roundEvent.targetName;
+    // Убираем механический эффект
+    roundEvent.effect = { type: 'none' };
+    roundEvent.effectLabel = '';
+    roundEvent.effectText = '';
+    // Дополнительно: можно убрать hint (подсказку), если она ещё есть
+    delete roundEvent.hint;
   }
   
   state.roundEvent = roundEvent;
   return state;
 }
-
 // ============================================================
 //  PROCESS VOTING RESULT (с учётом эффектов события)
 // ============================================================
