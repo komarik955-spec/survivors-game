@@ -176,8 +176,21 @@ function handleForceVoting(state, socketId) {
 // ============================================================
 
 function generateNewRoundEvent(state) {
+  const { generateRoundEvent } = require('./events');
   const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
-  state.roundEvent = generateRoundEvent(alive);
+  let roundEvent = generateRoundEvent(alive);
+  
+  if (roundEvent) {
+    // Удаляем привязку к конкретному игроку и делаем событие чисто информационным
+    roundEvent.effect = { type: 'none' };
+    roundEvent.effectLabel = 'ОБСУЖДЕНИЕ';
+    roundEvent.effectText = 'Событие не влияет на голосование — игроки сами решают, кому доверять';
+    // Удаляем поля с именами (на всякий случай)
+    delete roundEvent.targetId;
+    delete roundEvent.targetName;
+  }
+  
+  state.roundEvent = roundEvent;
   return state;
 }
 
