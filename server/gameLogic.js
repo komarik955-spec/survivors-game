@@ -177,20 +177,19 @@ function handleForceVoting(state, socketId) {
 
 function generateNewRoundEvent(state) {
   const { generateRoundEvent } = require('./events');
-  const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
-  let roundEvent = generateRoundEvent(alive);
+  // Новый events.js не требует аргументов, просто возвращает случайное событие
+  const rawEvent = generateRoundEvent();
   
-  if (roundEvent) {
-    // Убираем привязку к конкретным игрокам
-    delete roundEvent.targetId;
-    delete roundEvent.targetName;
-    // Убираем любые эффекты, оставляем только информационное событие
-    roundEvent.effect = { type: 'none' };
-    roundEvent.effectLabel = '';
-    roundEvent.effectText = '';
-  }
+  // Создаём чисто информационное событие без механик и без имён
+  state.roundEvent = {
+    icon: rawEvent.icon,
+    title: rawEvent.title,
+    description: rawEvent.description,
+    effect: { type: 'none' },
+    effectLabel: '',
+    effectText: ''
+  };
   
-  state.roundEvent = roundEvent;
   return state;
 }
 // ============================================================
