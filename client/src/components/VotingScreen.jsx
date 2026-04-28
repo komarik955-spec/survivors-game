@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function VotingScreen({ players, playerId, isAlive, votes, timer, onVote }) {
+export default function VotingScreen({ players, playerId, isAlive, votes, timer, roundEvent, onVote }) {
   const [selected, setSelected] = useState(null);
   const [confirmed, setConfirmed] = useState(false);
 
@@ -48,6 +48,29 @@ export default function VotingScreen({ players, playerId, isAlive, votes, timer,
 
       {/* Список для голосования */}
       <div style={s.body}>
+        {/* СОБЫТИЕ РАУНДА */}
+        {roundEvent && (
+          <div style={{
+            ...s.eventBar,
+            borderLeftColor: {
+              protect: 'var(--green)', penalty: 'var(--red)',
+              immunity: '#00aacc', expose: '#9966dd', none: 'var(--border-hi)',
+            }[roundEvent.effect?.type] || 'var(--amber)',
+          }}>
+            <span style={s.eventIcon}>{roundEvent.icon}</span>
+            <div style={s.eventTexts}>
+              <span style={s.eventTitle}>{roundEvent.title}</span>
+              <span style={s.eventEffect}>{roundEvent.effectText}</span>
+            </div>
+            <span style={{
+              ...s.eventBadge,
+              color: { protect: 'var(--green)', penalty: 'var(--red)', immunity: '#00aacc', expose: '#9966dd', none: 'var(--text-dim)' }[roundEvent.effect?.type] || 'var(--amber)',
+            }}>
+              {roundEvent.effectLabel}
+            </span>
+          </div>
+        )}
+
         {(hasVoted || confirmed || !isAlive) ? (
           <div style={s.waitBlock} className="fade-in">
             <span style={s.waitIcon}>⏳</span>
@@ -208,7 +231,6 @@ const s = {
     letterSpacing: '0.12em', borderRadius: 0,
   },
 
-  // WAITING
   waitBlock: {
     display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
     marginTop: 40,
@@ -231,5 +253,20 @@ const s = {
   },
   progressLabel: {
     fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--text-dim)',
+  },
+  eventBar: {
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: '10px 14px',
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderLeft: '3px solid var(--amber)',
+    width: '100%', maxWidth: 800, boxSizing: 'border-box',
+  },
+  eventIcon:  { fontSize: 22, flexShrink: 0 },
+  eventTexts: { display: 'flex', flexDirection: 'column', gap: 2, flex: 1 },
+  eventTitle: { fontFamily: 'var(--font-head)', fontSize: 13, fontWeight: 700, color: 'var(--text-bright)', letterSpacing: '0.05em' },
+  eventEffect:{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-dim)' },
+  eventBadge: {
+    fontFamily: 'var(--font-head)', fontSize: 10, letterSpacing: '0.15em',
+    border: '1px solid currentColor', padding: '2px 8px', flexShrink: 0,
   },
 };

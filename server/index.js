@@ -12,6 +12,7 @@ const {
   handleVote,
   handleForceVoting,
   processVotingResult,
+  generateNewRoundEvent,
   getAlivePlayers,
 } = require('./gameLogic');
 
@@ -79,31 +80,39 @@ function startCountdown(seconds, phase, onDone) {
 // ============================================================
 
 function startDiscussion() {
+  console.log('🎲 startDiscussion: начало раунда', gameState.round);
   gameState.phase = 'discussion';
   gameState.votes = new Map();
   gameState.forceVoteRequests = new Set();
   gameState.players.forEach(p => { p.cardsOpenedThisRound = 0; });
 
+  // Генерируем событие раунда
+  gameState = generateNewRoundEvent(gameState);
+  const roundEvent = gameState.roundEvent;
+  console.log('🎲 roundEvent после генерации:', roundEvent?.title);
+
   io.emit('newRound', {
-    round:   gameState.round,
-    players: publicPlayers(gameState),
+    round:      gameState.round,
+    players:    publicPlayers(gameState),
+    roundEvent: roundEvent,
   });
 
   startCountdown(gameState.timerDuration, 'discussion', startVoting);
 }
 
 function startVoting() {
+  console.log('🗳️ startVoting: roundEvent', gameState.roundEvent?.title);
   gameState.phase = 'voting';
   gameState.votes = new Map();
 
   const alive = getAlivePlayers(gameState);
 
   io.emit('votingStarted', {
-    players: publicPlayers(gameState),
-    total:   alive.length,
+    players:    publicPlayers(gameState),
+    total:      alive.length,
+    roundEvent: gameState.roundEvent,
   });
 
-  // 90 секунд на голосование, потом принудительный подсчёт
   startCountdown(90, 'voting', finishVoting);
 }
 
@@ -123,22 +132,23 @@ function finishVoting() {
   io.emit('votingResult', {
     eliminatedId:    result.eliminatedId,
     eliminatedName:  eliminated?.name,
-    eliminatedCards: eliminated?.cards,    // раскрыть все карты выбывшего
+    eliminatedCards: eliminated?.cards,
     voteCounts:      result.voteCounts,
     tie:             result.tie,
     noVotes:         result.noVotes,
     players:         publicPlayers(gameState),
     gameOver,
+    roundEvent:      gameState.roundEvent,
     survivors: gameOver
       ? alive.map(p => ({ id: p.id, name: p.name }))
       : null,
   });
 
   if (!gameOver) {
-    // Пауза 6 сек, потом новый раунд
     setTimeout(startDiscussion, 6000);
   } else {
     gameState.phase = 'ended';
+    console.log('🏁 Игра окончена');
   }
 }
 
@@ -149,15 +159,11 @@ function finishVoting() {
 io.on('connection', (socket) => {
   console.log(`[+] ${socket.id}`);
 
-  // Новый сокет получает текущее состояние
   socket.emit('currentState', {
     phase:   gameState.phase,
     players: publicPlayers(gameState),
   });
 
-  // ──────────────────────────────────
-  //  JOIN
-  // ──────────────────────────────────
   socket.on('joinGame', ({ name }) => {
     const res = handleJoin(gameState, socket.id, name);
     if (res.error) { socket.emit('gameError', res.error); return; }
@@ -168,9 +174,6 @@ io.on('connection', (socket) => {
     io.emit('updatePlayers', { players: publicPlayers(gameState) });
   });
 
-  // ──────────────────────────────────
-  //  START
-  // ──────────────────────────────────
   socket.on('startGame', ({ survivorsCount, timerDuration }) => {
     const me = gameState.players.get(socket.id);
     if (!me?.isHost) return;
@@ -179,62 +182,54 @@ io.on('connection', (socket) => {
     if (res.error) { socket.emit('gameError', res.error); return; }
     gameState = res.state;
 
-    // Отправить приватные карты каждому
     gameState.players.forEach((p, id) => {
       io.to(id).emit('playerData', { cards: p.cards });
     });
 
     io.emit('gameStarted', {
-      catastrophe:    gameState.catastrophe,
-      players:        publicPlayers(gameState),
-      round:          gameState.round,
+      catastrophe:     gameState.catastrophe,
+      players:         publicPlayers(gameState),
+      round:           gameState.round,
       survivorsTarget: gameState.survivorsTarget,
+      roundEvent:      gameState.roundEvent,
     });
 
-    // 2 сек пауза на показ катастрофы, потом старт таймера
     setTimeout(() => startCountdown(gameState.timerDuration, 'discussion', startVoting), 2000);
   });
 
-  // ──────────────────────────────────
-  //  OPEN CARD
-  // ──────────────────────────────────
   socket.on('openCard', ({ cardType }) => {
-  const res = handleOpenCard(gameState, socket.id, cardType);
-  if (res.error) { socket.emit('gameError', res.error); return; }
-  gameState = res.state;
+    const res = handleOpenCard(gameState, socket.id, cardType);
+    if (res.error) { socket.emit('gameError', res.error); return; }
+    gameState = res.state;
 
-  // 1. Отправляем событие обновления карт (как и раньше)
-  io.emit('cardOpened', {
-    playerId: socket.id,
-    playerName: res.event.playerName,
-    cardType: res.event.cardType,
-    cardValue: res.event.cardValue,
-    players: publicPlayers(gameState),
+    io.emit('cardOpened', {
+      playerId:   socket.id,
+      playerName: res.event.playerName,
+      cardType:   res.event.cardType,
+      cardValue:  res.event.cardValue,
+      players:    publicPlayers(gameState),
+      byEvent:    false,
+    });
+
+    const labels = {
+      profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
+      fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
+    };
+    const cardLabel = labels[cardType] || cardType;
+    const cardTitle = res.event.cardValue?.name || '?';
+    const cardNote = res.event.cardValue?.note ? ` (${res.event.cardValue.note})` : '';
+    
+    const chatMessage = {
+      id: `system-${Date.now()}`,
+      playerId: 'system',
+      playerName: '📢 СИСТЕМА',
+      text: `${res.event.playerName} открыл ${cardLabel}: ${cardTitle}${cardNote}`,
+      ts: Date.now(),
+      isSystem: true,
+    };
+    io.emit('chatMessage', chatMessage);
   });
 
-  // 2. Отправляем системное сообщение в чат (для всех)
-  const labels = {
-    profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
-    fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
-  };
-  const cardLabel = labels[cardType] || cardType;
-  const cardTitle = res.event.cardValue?.name || '?';
-  const cardNote = res.event.cardValue?.note ? ` (${res.event.cardValue.note})` : '';
-  
-  const chatMessage = {
-    id: `system-${Date.now()}`,
-    playerId: 'system',          // специальный ID для системных сообщений
-    playerName: '📢 СИСТЕМА',
-    text: `${res.event.playerName} открыл ${cardLabel}: ${cardTitle}${cardNote}`,
-    ts: Date.now(),
-    isSystem: true,
-  };
-  io.emit('chatMessage', chatMessage);
-});
-
-  // ──────────────────────────────────
-  //  VOTE
-  // ──────────────────────────────────
   socket.on('vote', ({ targetId }) => {
     const res = handleVote(gameState, socket.id, targetId);
     if (res.error) { socket.emit('gameError', res.error); return; }
@@ -253,9 +248,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ──────────────────────────────────
-  //  FORCE VOTING REQUEST
-  // ──────────────────────────────────
   socket.on('requestForceVoting', () => {
     const res = handleForceVoting(gameState, socket.id);
     if (res.error) return;
@@ -276,9 +268,6 @@ io.on('connection', (socket) => {
     }
   });
 
-  // ──────────────────────────────────
-  //  CHAT
-  // ──────────────────────────────────
   socket.on('sendChat', ({ text }) => {
     const player = gameState.players.get(socket.id);
     if (!player || player.status !== 'alive') return;
@@ -296,38 +285,50 @@ io.on('connection', (socket) => {
     });
   });
 
-  // ──────────────────────────────────
-  //  RESET (хост)
-  // ──────────────────────────────────
   socket.on('resetGame', () => {
     const me = gameState.players.get(socket.id);
-    if (!me?.isHost) return;
+    if (!me) return;
+
     clearTimers();
 
-    // Сохранить игроков, сбросить всё остальное
     const savedPlayers = new Map();
-    let firstPlayer = true;
+    savedPlayers.set(socket.id, {
+      id: socket.id,
+      name: me.name,
+      isHost: true,
+      status: 'alive',
+      cards: null,
+      openedCards: {},
+      cardsOpenedThisRound: 0,
+    });
     gameState.players.forEach((p, id) => {
-      savedPlayers.set(id, {
-        id, name: p.name,
-        isHost:               firstPlayer,
-        status:               'alive',
-        cards:                null,
-        openedCards:          {},
-        cardsOpenedThisRound: 0,
-      });
-      firstPlayer = false;
+      if (id !== socket.id) {
+        savedPlayers.set(id, {
+          id: p.id,
+          name: p.name,
+          isHost: false,
+          status: 'alive',
+          cards: null,
+          openedCards: {},
+          cardsOpenedThisRound: 0,
+        });
+      }
     });
 
     gameState = createGame();
     gameState.players = savedPlayers;
+    gameState.phase = 'lobby';
+    gameState.round = 1;
+    gameState.catastrophe = null;
+    gameState.survivorsTarget = 2;
+    gameState.timerDuration = 120;
+    gameState.votes = new Map();
+    gameState.forceVoteRequests = new Set();
+    gameState.roundEvent = null;
 
     io.emit('gameReset', { players: publicPlayers(gameState) });
   });
 
-  // ──────────────────────────────────
-  //  DISCONNECT
-  // ──────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[-] ${socket.id}`);
     const player = gameState.players.get(socket.id);
@@ -336,7 +337,6 @@ io.on('connection', (socket) => {
     const wasHost = player.isHost;
     gameState.players.delete(socket.id);
 
-    // Переназначить хоста
     if (wasHost && gameState.players.size > 0) {
       const newHost = getAlivePlayers(gameState)[0]
         || Array.from(gameState.players.values())[0];
@@ -349,14 +349,12 @@ io.on('connection', (socket) => {
       players:    publicPlayers(gameState),
     });
 
-    // Если в голосовании все уже проголосовали — считаем результат
     if (gameState.phase === 'voting') {
       const alive = getAlivePlayers(gameState);
       if (alive.length > 0 && gameState.votes.size >= alive.length) {
         clearTimers();
         setTimeout(finishVoting, 800);
       }
-      // Если живых <= target — конец
       if (alive.length <= gameState.survivorsTarget) {
         clearTimers();
         finishVoting();
@@ -365,11 +363,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// ============================================================
-//  СТАРТ
-// ============================================================
-
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`\n🚀 Сервер запущен: http://localhost:${PORT}\n`);
 });

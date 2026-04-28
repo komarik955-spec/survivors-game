@@ -11,7 +11,7 @@ import ToastArea  from './components/ToastArea.jsx';
 
 // ─── НАЧАЛЬНОЕ СОСТОЯНИЕ ─────────────────────────────
 const INIT = {
-  screen:          'login',   // login | lobby | game | voting | result | end
+  screen:          'login',
   playerId:        null,
   isHost:          false,
   players:         [],
@@ -26,6 +26,7 @@ const INIT = {
   messages:        [],
   eliminationData: null,
   endData:         null,
+  roundEvent:      null,
 };
 
 export default function App() {
@@ -44,9 +45,7 @@ export default function App() {
   // ─── SOCKET EVENTS ────────────────────────────────
   useEffect(() => {
     socket.on('currentState', ({ phase, players }) => {
-      if (phase !== 'lobby' && phase !== 'ended') {
-        // можно показать сообщение, что игра идёт
-      }
+      if (phase !== 'lobby' && phase !== 'ended') {}
       update({ players });
     });
 
@@ -63,17 +62,12 @@ export default function App() {
       toast(`${playerName} покинул игру`, 'leave');
     });
 
-    socket.on('gameStarted', ({ catastrophe, players, round, survivorsTarget }) => {
+    socket.on('gameStarted', ({ catastrophe, players, round, survivorsTarget, roundEvent }) => {
+      console.log('🎮 gameStarted roundEvent:', roundEvent);
       update({
-        screen: 'game',
-        catastrophe,
-        players,
-        round,
-        survivorsTarget,
-        messages: [],
-        votes: { hasVoted: [], count: 0, total: 0 },
-        forceVote: { count: 0, needed: 0 },
-        eliminationData: null,
+        screen: 'game', catastrophe, players, round, survivorsTarget,
+        messages: [], votes: { hasVoted: [], count: 0, total: 0 },
+        forceVote: { count: 0, needed: 0 }, eliminationData: null, roundEvent,
       });
     });
 
@@ -81,30 +75,22 @@ export default function App() {
       update({ myCards: cards });
     });
 
-    socket.on('newRound', ({ round, players }) => {
-      update({
-        round,
-        players,
-        screen: 'game',
-        eliminationData: null,
-        votes: { hasVoted: [], count: 0, total: 0 }
-      });
+    socket.on('newRound', ({ round, players, roundEvent }) => {
+      console.log('🔔 newRound event received, roundEvent =', roundEvent);
+      update({ round, players, screen: 'game', eliminationData: null,
+               votes: { hasVoted: [], count: 0, total: 0 }, roundEvent });
     });
 
     socket.on('cardOpened', ({ players, playerName, cardType, cardValue }) => {
-  update({ players });
-  const labels = {
-    profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
-    fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
-  };
-  // Формируем полное сообщение: имя игрока → тип карты → название → заметка
-  const cardTitle = cardValue?.name || '?';
-  const cardNote = cardValue?.note ? ` (${cardValue.note})` : '';
-  toast(
-    `${playerName} открыл ${labels[cardType] || cardType}: ${cardTitle}${cardNote}`,
-    'card'
-  );
-});
+      update({ players });
+      const labels = {
+        profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
+        fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
+      };
+      const cardTitle = cardValue?.name || '?';
+      const cardNote = cardValue?.note ? ` (${cardValue.note})` : '';
+      toast(`${playerName} открыл ${labels[cardType] || cardType}: ${cardTitle}${cardNote}`, 'card');
+    });
 
     socket.on('timerUpdate', ({ remaining, phase }) => {
       update({ timer: remaining, timerPhase: phase });
@@ -115,12 +101,8 @@ export default function App() {
       toast(`Голосование: за ${count}/${needed}`, 'info');
     });
 
-    socket.on('votingStarted', ({ players, total }) => {
-      update({
-        screen: 'voting',
-        players,
-        votes: { hasVoted: [], count: 0, total }
-      });
+    socket.on('votingStarted', ({ players, total, roundEvent }) => {
+      update({ screen: 'voting', players, votes: { hasVoted: [], count: 0, total }, roundEvent });
     });
 
     socket.on('updateVotes', ({ hasVoted, count, total }) => {
@@ -148,7 +130,6 @@ export default function App() {
       setG(prev => ({ ...prev, messages: [...prev.messages.slice(-120), msg] }));
     });
 
-    // ✅ ИСПРАВЛЕННЫЙ ОБРАБОТЧИК gameReset – использует prev, чтобы избежать замыкания
     socket.on('gameReset', ({ players }) => {
       setG(prev => {
         const me = players.find(p => p.id === prev.playerId);
@@ -175,8 +156,7 @@ export default function App() {
     });
 
     return () => socket.removeAllListeners();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Пустые зависимости – эффект срабатывает один раз
+  }, []);
 
   // ─── ACTIONS ──────────────────────────────────────
   const actions = {
@@ -223,6 +203,7 @@ export default function App() {
           timerPhase={g.timerPhase}
           forceVote={g.forceVote}
           messages={g.messages}
+          roundEvent={g.roundEvent}
           onOpenCard={actions.openCard}
           onForceVoting={actions.requestForceVoting}
           onSendChat={actions.sendChat}
@@ -236,6 +217,7 @@ export default function App() {
           isAlive={isAlive}
           votes={g.votes}
           timer={g.timer}
+          roundEvent={g.roundEvent}
           onVote={actions.vote}
         />
       )}

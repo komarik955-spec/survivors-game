@@ -14,7 +14,7 @@ const CARD_LABELS = {
 export default function GameScreen({
   players, playerId, isHost, isAlive,
   myCards, catastrophe, round, survivorsTarget,
-  timer, timerPhase, forceVote, messages,
+  timer, timerPhase, forceVote, messages, roundEvent,
   onOpenCard, onForceVoting, onSendChat,
 }) {
   const [chatInput, setChatInput] = useState('');
@@ -30,6 +30,9 @@ export default function GameScreen({
   const forceNeeded     = forceVote?.needed || 0;
   const forceCount      = forceVote?.count  || 0;
   const iForceVoted     = forceVote?.requesters?.includes(playerId);
+
+  // Лог для отладки
+  console.log('🎮 GameScreen roundEvent:', roundEvent);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -127,6 +130,25 @@ export default function GameScreen({
 
         {/* ТЕЛО */}
         <div className="gs-body">
+
+          {/* СОБЫТИЕ РАУНДА */}
+          {roundEvent && (
+            <div className={`gs-event gs-event--${roundEvent.effect?.type || 'none'}`}>
+              <div className="gs-event-left">
+                <span className="gs-event-icon">{roundEvent.icon}</span>
+                <div className="gs-event-texts">
+                  <div className="gs-event-title">{roundEvent.title}</div>
+                  <div className="gs-event-desc">{roundEvent.description}</div>
+                </div>
+              </div>
+              <div className="gs-event-right">
+                <span className={`gs-event-badge gs-event-badge--${roundEvent.effect?.type || 'none'}`}>
+                  {roundEvent.effectLabel}
+                </span>
+                <span className="gs-event-effect">{roundEvent.effectText}</span>
+              </div>
+            </div>
+          )}
 
           {/* МОИ КАРТЫ */}
           {myCards && (
@@ -269,7 +291,7 @@ export default function GameScreen({
 }
 
 // ══════════════════════════════════════════════════════
-//  CSS (все стили внутри одной строки)
+//  CSS (полная версия с адаптацией и событиями)
 // ══════════════════════════════════════════════════════
 const CSS = `
 /* ─── ROOT ─── */
@@ -360,9 +382,7 @@ const CSS = `
   gap: 5px;
 }
 .gs-stat--green { color: var(--text-dim); }
-.gs-stat--green span { color: var(--green); }
 .gs-stat--red   { color: var(--text-dim); }
-.gs-stat--red   span { color: var(--red); }
 
 /* ─── ТЕЛО ─── */
 .gs-body {
@@ -403,7 +423,6 @@ const CSS = `
 .gs-limit { color: var(--red); }
 
 /* ─── КАРТЫ ─── */
-/* Desktop: 6 в ряд */
 .gs-cards-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -412,106 +431,45 @@ const CSS = `
 .gs-card-cell {
   height: 200px;
 }
-
-/* Tablet: 3 в ряд */
 @media (max-width: 900px) {
-  .gs-cards-grid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-  .gs-card-cell {
-    height: 180px;
-  }
+  .gs-cards-grid { grid-template-columns: repeat(3, 1fr); }
+  .gs-card-cell { height: 180px; }
 }
-
-/* Mobile: 3 в ряд, компактнее */
 @media (max-width: 600px) {
-  .gs-cards-grid {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 7px;
-  }
-  .gs-card-cell {
-    height: 160px;
-  }
+  .gs-cards-grid { grid-template-columns: repeat(3, 1fr); gap: 7px; }
+  .gs-card-cell { height: 160px; }
 }
-
-/* Очень узкие телефоны (≤400px) – ещё компактнее */
 @media (max-width: 400px) {
-  .gs-bar {
-    padding: 5px 8px;
-  }
-  .gs-bar-big {
-    font-size: 18px;
-  }
-  .gs-bar-small {
-    font-size: 7px;
-  }
-  .gs-subbar {
-    padding: 4px 8px;
-  }
-  .gs-cat-chip-text {
-    font-size: 9px;
-  }
-  .gs-stat {
-    font-size: 9px;
-  }
-  .gs-panel {
-    padding: 8px 8px;
-  }
-  .gs-panel-title {
-    font-size: 9px;
-  }
-  .gs-cards-grid {
-    gap: 4px;
-  }
-  .gs-card-cell {
-    height: 130px;
-  }
-  .gs-player-name {
-    font-size: 12px;
-  }
-  .gs-player-count {
-    font-size: 9px;
-  }
-  .gs-chat-name {
-    font-size: 10px;
-  }
-  .gs-chat-text {
-    font-size: 11px;
-  }
-  .gs-chat-input, .gs-chat-send {
-    font-size: 11px;
-    padding: 5px 6px;
-  }
-  .gs-force-btn {
-    font-size: 9px;
-    padding: 6px;
-  }
-  .gs-dead-pill {
-    font-size: 9px;
-    padding: 2px 6px;
-  }
-  .gs-splash-box {
-    padding: 20px 16px;
-  }
-  .gs-splash-name {
-    font-size: 24px;
-  }
+  .gs-bar { padding: 5px 8px; }
+  .gs-bar-big { font-size: 18px; }
+  .gs-bar-small { font-size: 7px; }
+  .gs-subbar { padding: 4px 8px; }
+  .gs-cat-chip-text { font-size: 9px; }
+  .gs-stat { font-size: 9px; }
+  .gs-panel { padding: 8px 8px; }
+  .gs-panel-title { font-size: 9px; }
+  .gs-cards-grid { gap: 4px; }
+  .gs-card-cell { height: 130px; }
+  .gs-player-name { font-size: 12px; }
+  .gs-player-count { font-size: 9px; }
+  .gs-chat-name { font-size: 10px; }
+  .gs-chat-text { font-size: 11px; }
+  .gs-chat-input, .gs-chat-send { font-size: 11px; padding: 5px 6px; }
+  .gs-force-btn { font-size: 9px; padding: 6px; }
+  .gs-dead-pill { font-size: 9px; padding: 2px 6px; }
+  .gs-splash-box { padding: 20px 16px; }
+  .gs-splash-name { font-size: 24px; }
 }
 
 /* ─── НИЖНЯЯ СЕТКА ─── */
-/* Desktop: два столбца */
 .gs-bottom {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
   align-items: start;
 }
-
-/* Mobile: один столбец */
 @media (max-width: 700px) {
-  .gs-bottom {
-    grid-template-columns: 1fr;
-  }
+  .gs-bottom { grid-template-columns: 1fr; }
 }
 
 /* ─── ИГРОКИ ─── */
@@ -559,8 +517,6 @@ const CSS = `
   flex-direction: column;
   gap: 6px;
 }
-
-/* Стиль для полной карточки открытой карты */
 .gs-pill-full {
   background: var(--surface2);
   border: 1px solid var(--border);
@@ -616,9 +572,7 @@ const CSS = `
   color: #fff;
   border: none;
   text-transform: uppercase;
-  transition: background 0.15s;
 }
-.gs-force-btn:hover:not(:disabled) { background: #ff4455; }
 .gs-force-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .gs-force-btn--voted {
   background: transparent;
@@ -638,13 +592,9 @@ const CSS = `
   gap: 2px;
   padding-right: 4px;
 }
-
 @media (max-width: 700px) {
-  .gs-chat-messages {
-    max-height: 180px;
-  }
+  .gs-chat-messages { max-height: 180px; }
 }
-
 .gs-chat-empty {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -665,7 +615,6 @@ const CSS = `
   font-weight: 700;
   color: var(--amber);
   flex-shrink: 0;
-  letter-spacing: 0.04em;
 }
 .gs-chat-text {
   font-family: var(--font-mono);
@@ -698,6 +647,58 @@ const CSS = `
   color: var(--red);
   border: 1px solid var(--red-dim);
   padding: 2px 8px;
+}
+
+/* ─── СОБЫТИЕ РАУНДА ─── */
+.gs-event {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--amber);
+  background: rgba(240,165,0,0.05);
+  flex-wrap: wrap;
+}
+.gs-event--protect  { border-left-color: var(--green);  background: rgba(0,204,102,0.05); }
+.gs-event--penalty  { border-left-color: var(--red);    background: rgba(221,51,68,0.05); }
+.gs-event--immunity { border-left-color: #00aacc;       background: rgba(0,170,204,0.05); }
+.gs-event--expose   { border-left-color: #9966dd;       background: rgba(153,102,221,0.05); }
+.gs-event-left {
+  display: flex; align-items: flex-start; gap: 10px; flex: 1; min-width: 0;
+}
+.gs-event-icon { font-size: 24px; flex-shrink: 0; line-height: 1.2; }
+.gs-event-texts { display: flex; flex-direction: column; gap: 3px; }
+.gs-event-title {
+  font-family: var(--font-head); font-size: 14px; font-weight: 700;
+  letter-spacing: 0.06em; color: var(--text-bright);
+}
+.gs-event-desc {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text-dim); line-height: 1.5;
+}
+.gs-event-right {
+  display: flex; flex-direction: column; align-items: flex-end;
+  gap: 4px; flex-shrink: 0; max-width: 260px;
+}
+.gs-event-badge {
+  font-family: var(--font-head); font-size: 10px;
+  letter-spacing: 0.18em; padding: 2px 10px; border: 1px solid;
+}
+.gs-event-badge--protect  { color: var(--green);  border-color: var(--green-dim); }
+.gs-event-badge--penalty  { color: var(--red);    border-color: var(--red-dim); }
+.gs-event-badge--immunity { color: #00aacc;       border-color: #005566; }
+.gs-event-badge--expose   { color: #9966dd;       border-color: #553388; }
+.gs-event-badge--none     { color: var(--text-dim); border-color: var(--border); }
+.gs-event-effect {
+  font-family: var(--font-mono); font-size: 11px;
+  color: var(--text); text-align: right; line-height: 1.4;
+}
+@media (max-width: 600px) {
+  .gs-event { flex-direction: column; }
+  .gs-event-right { align-items: flex-start; max-width: 100%; }
+  .gs-event-effect { text-align: left; }
 }
 
 /* ─── СПЛЭШ ─── */

@@ -1,4 +1,5 @@
 const { getRandomCards, getRandomCatastrophe } = require('./cards');
+const { generateRoundEvent } = require('./events');
 
 // ============================================================
 //  СОЗДАНИЕ ИГРЫ
@@ -6,14 +7,15 @@ const { getRandomCards, getRandomCatastrophe } = require('./cards');
 
 function createGame() {
   return {
-    players: new Map(),       // socketId → playerObj
-    phase: 'lobby',           // lobby | discussion | voting | result | ended
+    players: new Map(),
+    phase: 'lobby',
     round: 1,
     catastrophe: null,
     survivorsTarget: 2,
-    timerDuration: 120,       // секунды обсуждения
-    votes: new Map(),         // voterId → targetId
+    timerDuration: 120,
+    votes: new Map(),
     forceVoteRequests: new Set(),
+    roundEvent: null,
   };
 }
 
@@ -48,7 +50,7 @@ function handleJoin(state, socketId, name) {
     isHost,
     status: 'alive',
     cards: null,
-    openedCards: {},           // { cardType: cardObj }  — что открыто
+    openedCards: {},
     cardsOpenedThisRound: 0,
   });
 
@@ -79,6 +81,10 @@ function handleStartGame(state, survivorsCount, timerDuration) {
     player.cardsOpenedThisRound = 0;
     player.status              = 'alive';
   });
+
+  // Генерируем первое событие раунда
+  const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
+  state.roundEvent = generateRoundEvent(alive);
 
   return { state };
 }
@@ -166,34 +172,77 @@ function handleForceVoting(state, socketId) {
 }
 
 // ============================================================
-//  PROCESS VOTING RESULT
+//  ГЕНЕРАЦИЯ СОБЫТИЯ ДЛЯ НОВОГО РАУНДА
+// ============================================================
+
+function generateNewRoundEvent(state) {
+  const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
+  state.roundEvent = generateRoundEvent(alive);
+  return state;
+}
+
+// ============================================================
+//  PROCESS VOTING RESULT (с учётом эффектов события)
 // ============================================================
 
 function processVotingResult(state) {
   const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
+  const event  = state.roundEvent;
+  const effect = event?.effect || { type: 'none' };
 
-  // Инициализируем счётчики для всех живых
   const voteCounts = {};
   alive.forEach(p => { voteCounts[p.id] = 0; });
 
   state.votes.forEach((targetId) => {
-    if (voteCounts.hasOwnProperty(targetId)) {
+    if (!voteCounts.hasOwnProperty(targetId)) return;
+
+    if (effect.type === 'penalty' && effect.targetId === targetId) {
+      voteCounts[targetId] += 2;
+    } else {
       voteCounts[targetId] += 1;
     }
   });
 
-  // Если никто не голосовал — случайное исключение
+  if (effect.type === 'immunity' && voteCounts.hasOwnProperty(effect.targetId)) {
+    voteCounts[effect.targetId] = 0;
+  }
+
   const allZero = Object.values(voteCounts).every(v => v === 0);
   if (allZero && alive.length > 0) {
-    const unlucky = alive[Math.floor(Math.random() * alive.length)];
+    const candidates = effect.type === 'immunity'
+      ? alive.filter(p => p.id !== effect.targetId)
+      : alive;
+    const pool = candidates.length ? candidates : alive;
+    const unlucky = pool[Math.floor(Math.random() * pool.length)];
     return { eliminatedId: unlucky.id, voteCounts, tie: false, noVotes: true };
   }
 
-  const maxVotes  = Math.max(...Object.values(voteCounts));
-  const candidates = Object.keys(voteCounts).filter(id => voteCounts[id] === maxVotes);
+  let candidates;
+  if (effect.type === 'protect' && voteCounts.hasOwnProperty(effect.targetId)) {
+    const protectedVotes = voteCounts[effect.targetId];
+    const othersMax = Math.max(
+      ...Object.entries(voteCounts)
+        .filter(([id]) => id !== effect.targetId)
+        .map(([, v]) => v),
+      0
+    );
+    const adjustedCounts = { ...voteCounts };
+    if (protectedVotes - othersMax < 2) {
+      adjustedCounts[effect.targetId] = 0;
+    }
+    const maxV  = Math.max(...Object.values(adjustedCounts));
+    candidates  = Object.keys(adjustedCounts).filter(id => adjustedCounts[id] === maxV && adjustedCounts[id] > 0);
+    if (!candidates.length) {
+      const unlucky = alive[Math.floor(Math.random() * alive.length)];
+      return { eliminatedId: unlucky.id, voteCounts, tie: false, noVotes: true };
+    }
+  } else {
+    const maxV = Math.max(...Object.values(voteCounts));
+    candidates = Object.keys(voteCounts).filter(id => voteCounts[id] === maxV);
+  }
+
   const tie        = candidates.length > 1;
   const eliminatedId = candidates[Math.floor(Math.random() * candidates.length)];
-
   return { eliminatedId, voteCounts, tie, noVotes: false };
 }
 
@@ -213,5 +262,6 @@ module.exports = {
   handleVote,
   handleForceVoting,
   processVotingResult,
+  generateNewRoundEvent,
   getAlivePlayers,
 };
