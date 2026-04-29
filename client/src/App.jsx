@@ -8,7 +8,7 @@ import VotingScreen from './components/VotingScreen.jsx';
 import ResultScreen from './components/ResultScreen.jsx';
 import EndScreen  from './components/EndScreen.jsx';
 import ToastArea  from './components/ToastArea.jsx';
-import RoomSelector from './components/RoomSelector.jsx'; // новый компонент
+import RoomSelector from './components/RoomSelector.jsx';
 
 // ─── НАЧАЛЬНОЕ СОСТОЯНИЕ ─────────────────────────────
 const INIT = {
@@ -33,8 +33,9 @@ const INIT = {
 export default function App() {
   const [g, setG] = useState(INIT);
   const [toasts, setToasts] = useState([]);
-  const [roomId, setRoomId] = useState(null);        // текущая комната
-  const [roomError, setRoomError] = useState(null);  // ошибка при входе в комнату
+  const [roomId, setRoomId] = useState(null);
+  const [roomError, setRoomError] = useState(null);
+  const [pendingRoomId, setPendingRoomId] = useState(null); // временно храним код, который ввёл игрок
   const toastId = useRef(0);
 
   const toast = useCallback((text, type = 'info') => {
@@ -163,22 +164,28 @@ export default function App() {
     socket.on('roomCreated', ({ roomId }) => {
       setRoomId(roomId);
       setRoomError(null);
-      // после создания показываем логин
       setG(prev => ({ ...prev, screen: 'login' }));
     });
 
     socket.on('roomJoined', ({ playerId, isHost }) => {
-      setRoomId(roomId); // сохраняем тот же roomId
-      setRoomError(null);
-      setG(prev => ({ ...prev, playerId, isHost, screen: 'login' }));
+      // Используем сохранённый перед отправкой код комнаты
+      if (pendingRoomId) {
+        setRoomId(pendingRoomId);
+        setPendingRoomId(null);
+        setRoomError(null);
+        setG(prev => ({ ...prev, playerId, isHost, screen: 'login' }));
+      } else {
+        console.error('roomJoined без ожидания pendingRoomId');
+      }
     });
 
     socket.on('roomError', ({ message }) => {
       setRoomError(message);
+      setPendingRoomId(null);
     });
 
     return () => socket.removeAllListeners();
-  }, []);
+  }, [pendingRoomId]); // добавили зависимость, чтобы обработчик видел актуальное значение
 
   // ─── ACTIONS ──────────────────────────────────────
   const actions = {
@@ -186,6 +193,7 @@ export default function App() {
       socket.emit('createRoom');
     },
     joinRoom: (code) => {
+      setPendingRoomId(code);            // запоминаем, какую комнату просим
       socket.emit('joinRoom', { roomId: code });
     },
     join: (name) => socket.emit('joinGame', { name }),
@@ -214,14 +222,14 @@ export default function App() {
       {g.screen === 'login' && <Login onJoin={actions.join} />}
 
       {g.screen === 'lobby' && (
-  <Lobby
-    players={g.players}
-    playerId={g.playerId}
-    isHost={g.isHost}
-    roomId={roomId}
-    onStart={actions.startGame}
-  />
-)}
+        <Lobby
+          players={g.players}
+          playerId={g.playerId}
+          isHost={g.isHost}
+          roomId={roomId}
+          onStart={actions.startGame}
+        />
+      )}
 
       {g.screen === 'game' && (
         <GameScreen
