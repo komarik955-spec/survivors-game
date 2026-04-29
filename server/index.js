@@ -1,9 +1,8 @@
 const path = require('path');
-const express  = require('express');
-const http     = require('http');
+const express = require('express');
+const http = require('http');
 const { Server } = require('socket.io');
-const cors     = require('cors');
-
+const cors = require('cors');
 const {
   createGame,
   handleJoin,
@@ -15,84 +14,157 @@ const {
   generateNewRoundEvent,
   getAlivePlayers,
 } = require('./gameLogic');
+const {
+  getRoom, setRoom, createRoom, cleanupRoomIfEmpty,
+  getRoomTimers, setRoomTimer, clearRoomTimer, clearAllRoomTimers
+} = require('./roomManager');
 
-// ============================================================
-//  INIT
-// ============================================================
-
-const app    = express();
+const app = express();
 const server = http.createServer(app);
-const io     = new Server(server, {
+const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
 app.use(cors());
-// Раздача собранного клиента
 app.use(express.static(path.join(__dirname, '../client/dist')));
 app.get('/health', (_, res) => res.json({ ok: true }));
-// Все остальные маршруты — отдаём index.html для SPA
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../client/dist/index.html'));
 });
-let gameState    = createGame();
-let timerInterval = null;
-let autoResetTimeout = null; // для таймера автоматического сброса
 
-// ============================================================
-//  ПУБЛИЧНЫЙ СНАПШОТ (без приватных карт)
-// ============================================================
-
+// ------------------------------------------------------------
+//  Утилиты для работы с комнатами
+// ------------------------------------------------------------
 function publicPlayers(state) {
   return Array.from(state.players.entries()).map(([id, p]) => ({
     id,
-    name:                  p.name,
-    isHost:                p.isHost,
-    status:                p.status,
-    openedCards:           p.openedCards,
-    cardsOpenedThisRound:  p.cardsOpenedThisRound,
+    name: p.name,
+    isHost: p.isHost,
+    status: p.status,
+    openedCards: p.openedCards,
+    cardsOpenedThisRound: p.cardsOpenedThisRound,
   }));
 }
 
-// ============================================================
-//  ТАЙМЕРЫ
-// ============================================================
-
-function clearTimers() {
-  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
-  if (autoResetTimeout) { clearTimeout(autoResetTimeout); autoResetTimeout = null; }
+// Генерация уникального ID для комнаты (на случай коллизий)
+function generateUniqueRoomId() {
+  let id;
+  do {
+    id = Math.random().toString(36).substring(2, 8).toUpperCase();
+  } while (getRoom(id));
+  return id;
 }
 
-function startCountdown(seconds, phase, onDone) {
-  clearTimers(); // очищаем только таймер обратного отсчёта, но не autoResetTimeout? Лучше разделить.
-  // Но в старом clearTimers чистил всё. Перепишем, чтобы не мешать автосбросу.
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = null;
-  let remaining = seconds;
-  io.emit('timerUpdate', { remaining, phase });
+// ------------------------------------------------------------
+//  Фазы игры (привязаны к комнате)
+// ------------------------------------------------------------
+function startDiscussion(roomId) {
+  let state = getRoom(roomId);
+  if (!state) return;
+  console.log(`🎲 [${roomId}] startDiscussion: начало раунда ${state.round}`);
+  state.phase = 'discussion';
+  state.votes = new Map();
+  state.forceVoteRequests = new Set();
+  state.players.forEach(p => { p.cardsOpenedThisRound = 0; });
 
-  timerInterval = setInterval(() => {
+  if (!state.roundEvent) {
+    state = generateNewRoundEvent(state);
+    setRoom(roomId, state);
+    console.log(`🎲 [${roomId}] Сгенерировано событие:`, state.roundEvent?.title);
+  } else {
+    console.log(`🎲 [${roomId}] Событие уже есть`);
+  }
+
+  io.to(roomId).emit('newRound', {
+    round: state.round,
+    players: publicPlayers(state),
+    roundEvent: state.roundEvent,
+  });
+
+  startCountdown(roomId, state.timerDuration, 'discussion', () => startVoting(roomId));
+}
+
+function startVoting(roomId) {
+  let state = getRoom(roomId);
+  if (!state) return;
+  console.log(`🗳️ [${roomId}] startVoting`);
+  state.phase = 'voting';
+  state.votes = new Map();
+  const alive = getAlivePlayers(state);
+  io.to(roomId).emit('votingStarted', {
+    players: publicPlayers(state),
+    total: alive.length,
+    roundEvent: state.roundEvent,
+  });
+  startCountdown(roomId, 90, 'voting', () => finishVoting(roomId));
+}
+
+function finishVoting(roomId) {
+  let state = getRoom(roomId);
+  if (!state) return;
+  clearRoomTimer(roomId, 'timerInterval');
+
+  const result = processVotingResult(state);
+  const eliminated = state.players.get(result.eliminatedId);
+  if (eliminated) eliminated.status = 'eliminated';
+
+  state.phase = 'result';
+  state.round += 1;
+  const alive = getAlivePlayers(state);
+  const gameOver = alive.length <= state.survivorsTarget;
+
+  io.to(roomId).emit('votingResult', {
+    eliminatedId: result.eliminatedId,
+    eliminatedName: eliminated?.name,
+    eliminatedCards: eliminated?.cards,
+    voteCounts: result.voteCounts,
+    tie: result.tie,
+    noVotes: result.noVotes,
+    players: publicPlayers(state),
+    gameOver,
+    roundEvent: state.roundEvent,
+    survivors: gameOver ? alive.map(p => ({ id: p.id, name: p.name })) : null,
+  });
+
+  if (!gameOver) {
+    setTimeout(() => startDiscussion(roomId), 6000);
+  } else {
+    state.phase = 'ended';
+    setRoom(roomId, state);
+    console.log(`🏁 [${roomId}] Игра окончена. Сброс через 10 секунд...`);
+    clearRoomTimer(roomId, 'autoResetTimeout');
+    const timeout = setTimeout(() => {
+      resetGameToLobby(roomId);
+    }, 10000);
+    setRoomTimer(roomId, 'autoResetTimeout', timeout);
+  }
+}
+
+function startCountdown(roomId, seconds, phase, onDone) {
+  clearRoomTimer(roomId, 'timerInterval');
+  let remaining = seconds;
+  io.to(roomId).emit('timerUpdate', { remaining, phase });
+  const interval = setInterval(() => {
     remaining -= 1;
-    io.emit('timerUpdate', { remaining, phase });
+    io.to(roomId).emit('timerUpdate', { remaining, phase });
     if (remaining <= 0) {
-      clearInterval(timerInterval);
-      timerInterval = null;
+      clearInterval(interval);
+      setRoomTimer(roomId, 'timerInterval', null);
       onDone();
     }
   }, 1000);
+  setRoomTimer(roomId, 'timerInterval', interval);
 }
 
-// ============================================================
-//  СБРОС ИГРЫ В ЛОББИ (без привязки к хосту)
-// ============================================================
-
-function resetGameToLobby() {
-  // Не сбрасываем, если игра не в состоянии 'ended' или если уже идёт сброс
-  if (gameState.phase !== 'ended') return;
-  console.log('🔄 Автоматический сброс игры в лобби...');
+function resetGameToLobby(roomId) {
+  let state = getRoom(roomId);
+  if (!state || state.phase !== 'ended') return;
+  console.log(`🔄 [${roomId}] Автоматический сброс игры в лобби...`);
+  clearAllRoomTimers(roomId);
 
   const savedPlayers = new Map();
   let first = true;
-  gameState.players.forEach((p, id) => {
+  state.players.forEach((p, id) => {
     savedPlayers.set(id, {
       id: p.id,
       name: p.name,
@@ -105,162 +177,105 @@ function resetGameToLobby() {
     first = false;
   });
 
-  gameState = createGame();
-  gameState.players = savedPlayers;
-  gameState.phase = 'lobby';
-  gameState.roundEvent = null; // событие сбрасывается
-
-  io.emit('gameReset', { players: publicPlayers(gameState) });
-  console.log('✅ Игра сброшена в лобби (автоматически)');
+  const newState = createGame();
+  newState.players = savedPlayers;
+  newState.phase = 'lobby';
+  setRoom(roomId, newState);
+  io.to(roomId).emit('gameReset', { players: publicPlayers(newState) });
+  console.log(`✅ [${roomId}] Игра сброшена в лобби`);
 }
 
-// ============================================================
-//  ФАЗЫ ИГРЫ
-// ============================================================
-
-function startDiscussion() {
-  console.log('🎲 startDiscussion: начало раунда', gameState.round);
-  gameState.phase = 'discussion';
-  gameState.votes = new Map();
-  gameState.forceVoteRequests = new Set();
-  gameState.players.forEach(p => { p.cardsOpenedThisRound = 0; });
-
-  // Генерируем событие только если его ещё нет (первый раунд)
-  if (!gameState.roundEvent) {
-    gameState = generateNewRoundEvent(gameState);
-    console.log('🎲 Сгенерировано единственное событие:', gameState.roundEvent?.title);
-  } else {
-    console.log('🎲 Событие уже существует, повторно не генерируем');
-  }
-
-  io.emit('newRound', {
-    round: gameState.round,
-    players: publicPlayers(gameState),
-    roundEvent: gameState.roundEvent,
-  });
-
-  startCountdown(gameState.timerDuration, 'discussion', startVoting);
-}
-
-function startVoting() {
-  console.log('🗳️ startVoting: roundEvent', gameState.roundEvent?.title);
-  gameState.phase = 'voting';
-  gameState.votes = new Map();
-
-  const alive = getAlivePlayers(gameState);
-
-  io.emit('votingStarted', {
-    players:    publicPlayers(gameState),
-    total:      alive.length,
-    roundEvent: gameState.roundEvent,
-  });
-
-  startCountdown(90, 'voting', finishVoting);
-}
-
-function finishVoting() {
-  // Очищаем только таймер обратного отсчёта, но не автосброс (если он был)
-  if (timerInterval) clearInterval(timerInterval);
-  timerInterval = null;
-
-  const result    = processVotingResult(gameState);
-  const eliminated = gameState.players.get(result.eliminatedId);
-  if (eliminated) eliminated.status = 'eliminated';
-
-  gameState.phase = 'result';
-  gameState.round += 1;
-
-  const alive    = getAlivePlayers(gameState);
-  const gameOver = alive.length <= gameState.survivorsTarget;
-
-  io.emit('votingResult', {
-    eliminatedId:    result.eliminatedId,
-    eliminatedName:  eliminated?.name,
-    eliminatedCards: eliminated?.cards,
-    voteCounts:      result.voteCounts,
-    tie:             result.tie,
-    noVotes:         result.noVotes,
-    players:         publicPlayers(gameState),
-    gameOver,
-    roundEvent:      gameState.roundEvent,
-    survivors: gameOver
-      ? alive.map(p => ({ id: p.id, name: p.name }))
-      : null,
-  });
-
-  if (!gameOver) {
-    setTimeout(startDiscussion, 6000);
-  } else {
-    gameState.phase = 'ended';
-    console.log('🏁 Игра окончена. Через 10 секунд сбросим в лобби...');
-    // Отменяем предыдущий таймер автосброса (если был)
-    if (autoResetTimeout) clearTimeout(autoResetTimeout);
-    autoResetTimeout = setTimeout(() => {
-      autoResetTimeout = null;
-      resetGameToLobby();
-    }, 10000);
-  }
-}
-
-// ============================================================
-//  SOCKET.IO СОБЫТИЯ
-// ============================================================
-
+// ------------------------------------------------------------
+//  Socket.IO
+// ------------------------------------------------------------
 io.on('connection', (socket) => {
-  console.log(`[+] ${socket.id}`);
+  let currentRoomId = null; // комната, в которой находится сокет
 
-  socket.emit('currentState', {
-    phase:   gameState.phase,
-    players: publicPlayers(gameState),
+  socket.on('createRoom', (_, callback) => {
+    const roomId = generateUniqueRoomId();
+    createRoom(roomId); // создаём комнату с пустым состоянием
+    currentRoomId = roomId;
+    socket.join(roomId);
+    console.log(`🆕 [${roomId}] Создана комната, создатель: ${socket.id}`);
+    callback({ roomId });
   });
 
-  socket.on('joinGame', ({ name }) => {
-    const res = handleJoin(gameState, socket.id, name);
-    if (res.error) { socket.emit('gameError', res.error); return; }
-    gameState = res.state;
+  socket.on('joinRoom', ({ roomId, name }, callback) => {
+    let state = getRoom(roomId);
+    if (!state) {
+      callback({ error: 'Комната не найдена' });
+      return;
+    }
+    const res = handleJoin(state, socket.id, name);
+    if (res.error) {
+      callback({ error: res.error });
+      return;
+    }
+    setRoom(roomId, res.state);
+    currentRoomId = roomId;
+    socket.join(roomId);
+    const me = res.state.players.get(socket.id);
+    callback({ playerId: socket.id, isHost: me.isHost });
+    io.to(roomId).emit('updatePlayers', { players: publicPlayers(res.state) });
+  });
 
-    const me = gameState.players.get(socket.id);
-    socket.emit('joinedGame', { playerId: socket.id, isHost: me.isHost });
-    io.emit('updatePlayers', { players: publicPlayers(gameState) });
+  socket.on('leaveRoom', () => {
+    if (!currentRoomId) return;
+    const state = getRoom(currentRoomId);
+    if (state) {
+      state.players.delete(socket.id);
+      setRoom(currentRoomId, state);
+      io.to(currentRoomId).emit('updatePlayers', { players: publicPlayers(state) });
+      cleanupRoomIfEmpty(currentRoomId);
+    }
+    socket.leave(currentRoomId);
+    currentRoomId = null;
   });
 
   socket.on('startGame', ({ survivorsCount, timerDuration }) => {
-    const me = gameState.players.get(socket.id);
+    if (!currentRoomId) return;
+    let state = getRoom(currentRoomId);
+    if (!state) return;
+    const me = state.players.get(socket.id);
     if (!me?.isHost) return;
-
-    const res = handleStartGame(gameState, survivorsCount, timerDuration);
-    if (res.error) { socket.emit('gameError', res.error); return; }
-    gameState = res.state;
-
-    gameState.players.forEach((p, id) => {
+    const res = handleStartGame(state, survivorsCount, timerDuration);
+    if (res.error) {
+      socket.emit('gameError', res.error);
+      return;
+    }
+    setRoom(currentRoomId, res.state);
+    state = res.state;
+    state.players.forEach((p, id) => {
       io.to(id).emit('playerData', { cards: p.cards });
     });
-
-    io.emit('gameStarted', {
-      catastrophe:     gameState.catastrophe,
-      players:         publicPlayers(gameState),
-      round:           gameState.round,
-      survivorsTarget: gameState.survivorsTarget,
-      roundEvent:      gameState.roundEvent,
+    io.to(currentRoomId).emit('gameStarted', {
+      catastrophe: state.catastrophe,
+      players: publicPlayers(state),
+      round: state.round,
+      survivorsTarget: state.survivorsTarget,
+      roundEvent: state.roundEvent,
     });
-
-    setTimeout(() => startCountdown(gameState.timerDuration, 'discussion', startVoting), 2000);
+    setTimeout(() => startCountdown(currentRoomId, state.timerDuration, 'discussion', () => startVoting(currentRoomId)), 2000);
   });
 
   socket.on('openCard', ({ cardType }) => {
-    const res = handleOpenCard(gameState, socket.id, cardType);
-    if (res.error) { socket.emit('gameError', res.error); return; }
-    gameState = res.state;
-
-    io.emit('cardOpened', {
-      playerId:   socket.id,
+    if (!currentRoomId) return;
+    let state = getRoom(currentRoomId);
+    if (!state) return;
+    const res = handleOpenCard(state, socket.id, cardType);
+    if (res.error) {
+      socket.emit('gameError', res.error);
+      return;
+    }
+    setRoom(currentRoomId, res.state);
+    io.to(currentRoomId).emit('cardOpened', {
+      playerId: socket.id,
       playerName: res.event.playerName,
-      cardType:   res.event.cardType,
-      cardValue:  res.event.cardValue,
-      players:    publicPlayers(gameState),
-      byEvent:    false,
+      cardType: res.event.cardType,
+      cardValue: res.event.cardValue,
+      players: publicPlayers(res.state),
+      byEvent: false,
     });
-
     const labels = {
       profession: 'Профессия', health: 'Здоровье', biology: 'Биология',
       fact: 'Факт', hobby: 'Хобби', baggage: 'Багаж',
@@ -268,91 +283,87 @@ io.on('connection', (socket) => {
     const cardLabel = labels[cardType] || cardType;
     const cardTitle = res.event.cardValue?.name || '?';
     const cardNote = res.event.cardValue?.note ? ` (${res.event.cardValue.note})` : '';
-    
-    const chatMessage = {
+    io.to(currentRoomId).emit('chatMessage', {
       id: `system-${Date.now()}`,
       playerId: 'system',
       playerName: '📢 СИСТЕМА',
       text: `${res.event.playerName} открыл ${cardLabel}: ${cardTitle}${cardNote}`,
       ts: Date.now(),
       isSystem: true,
-    };
-    io.emit('chatMessage', chatMessage);
+    });
   });
 
   socket.on('vote', ({ targetId }) => {
-    const res = handleVote(gameState, socket.id, targetId);
-    if (res.error) { socket.emit('gameError', res.error); return; }
-    gameState = res.state;
-
-    const alive = getAlivePlayers(gameState);
-    io.emit('updateVotes', {
-      hasVoted: Array.from(gameState.votes.keys()),
-      count:    gameState.votes.size,
-      total:    alive.length,
+    if (!currentRoomId) return;
+    let state = getRoom(currentRoomId);
+    if (!state) return;
+    const res = handleVote(state, socket.id, targetId);
+    if (res.error) {
+      socket.emit('gameError', res.error);
+      return;
+    }
+    setRoom(currentRoomId, res.state);
+    const alive = getAlivePlayers(res.state);
+    io.to(currentRoomId).emit('updateVotes', {
+      hasVoted: Array.from(res.state.votes.keys()),
+      count: res.state.votes.size,
+      total: alive.length,
     });
-
     if (res.votingComplete) {
-      clearInterval(timerInterval);
-      timerInterval = null;
-      setTimeout(finishVoting, 800);
+      clearRoomTimer(currentRoomId, 'timerInterval');
+      setTimeout(() => finishVoting(currentRoomId), 800);
     }
   });
 
   socket.on('requestForceVoting', () => {
-    const res = handleForceVoting(gameState, socket.id);
+    if (!currentRoomId) return;
+    let state = getRoom(currentRoomId);
+    if (!state) return;
+    const res = handleForceVoting(state, socket.id);
     if (res.error) return;
-    gameState = res.state;
-
-    const alive  = getAlivePlayers(gameState);
+    setRoom(currentRoomId, res.state);
+    const alive = getAlivePlayers(res.state);
     const needed = Math.ceil(alive.length / 2);
-
-    io.emit('forceVoteUpdate', {
-      count:      gameState.forceVoteRequests.size,
+    io.to(currentRoomId).emit('forceVoteUpdate', {
+      count: res.state.forceVoteRequests.size,
       needed,
-      requesters: Array.from(gameState.forceVoteRequests),
+      requesters: Array.from(res.state.forceVoteRequests),
     });
-
     if (res.startVoting) {
-      if (timerInterval) clearInterval(timerInterval);
-      timerInterval = null;
-      startVoting();
+      clearRoomTimer(currentRoomId, 'timerInterval');
+      startVoting(currentRoomId);
     }
   });
 
   socket.on('sendChat', ({ text }) => {
-    const player = gameState.players.get(socket.id);
+    if (!currentRoomId) return;
+    const state = getRoom(currentRoomId);
+    if (!state) return;
+    const player = state.players.get(socket.id);
     if (!player || player.status !== 'alive') return;
-    if (gameState.phase !== 'discussion') return;
-
+    if (state.phase !== 'discussion') return;
     const msg = (text || '').trim().slice(0, 280);
     if (!msg) return;
-
-    io.emit('chatMessage', {
-      id:         `${socket.id}-${Date.now()}`,
-      playerId:   socket.id,
+    io.to(currentRoomId).emit('chatMessage', {
+      id: `${socket.id}-${Date.now()}`,
+      playerId: socket.id,
       playerName: player.name,
-      text:       msg,
-      ts:         Date.now(),
+      text: msg,
+      ts: Date.now(),
     });
   });
 
   socket.on('resetGame', () => {
-    const me = gameState.players.get(socket.id);
+    if (!currentRoomId) return;
+    let state = getRoom(currentRoomId);
+    if (!state) return;
+    const me = state.players.get(socket.id);
     if (!me) return;
-
-    // Если игра ещё не закончилась, но кто-то (хост) просит сбросить – можно, но предусмотрим
-    if (gameState.phase !== 'ended' && gameState.phase !== 'lobby') {
-      // Не разрешаем сброс во время игры, только после окончания или в лобби
+    if (state.phase !== 'ended' && state.phase !== 'lobby') {
       socket.emit('gameError', 'Сброс возможен только после окончания игры');
       return;
     }
-
-    clearInterval(timerInterval);
-    timerInterval = null;
-    if (autoResetTimeout) clearTimeout(autoResetTimeout);
-    autoResetTimeout = null;
-
+    clearAllRoomTimers(currentRoomId);
     const savedPlayers = new Map();
     savedPlayers.set(socket.id, {
       id: socket.id,
@@ -363,7 +374,7 @@ io.on('connection', (socket) => {
       openedCards: {},
       cardsOpenedThisRound: 0,
     });
-    gameState.players.forEach((p, id) => {
+    state.players.forEach((p, id) => {
       if (id !== socket.id) {
         savedPlayers.set(id, {
           id: p.id,
@@ -376,58 +387,37 @@ io.on('connection', (socket) => {
         });
       }
     });
-
-    gameState = createGame();
-    gameState.players = savedPlayers;
-    gameState.phase = 'lobby';
-    gameState.round = 1;
-    gameState.catastrophe = null;
-    gameState.survivorsTarget = 2;
-    gameState.timerDuration = 120;
-    gameState.votes = new Map();
-    gameState.forceVoteRequests = new Set();
-    gameState.roundEvent = null;
-
-    io.emit('gameReset', { players: publicPlayers(gameState) });
+    const newState = createGame();
+    newState.players = savedPlayers;
+    newState.phase = 'lobby';
+    setRoom(currentRoomId, newState);
+    io.to(currentRoomId).emit('gameReset', { players: publicPlayers(newState) });
   });
 
   socket.on('disconnect', () => {
-    console.log(`[-] ${socket.id}`);
-    const player = gameState.players.get(socket.id);
-    if (!player) return;
-
-    const wasHost = player.isHost;
-    gameState.players.delete(socket.id);
-
-    if (wasHost && gameState.players.size > 0) {
-      const newHost = getAlivePlayers(gameState)[0]
-        || Array.from(gameState.players.values())[0];
-      if (newHost) newHost.isHost = true;
-    }
-
-    io.emit('playerLeft', {
-      playerId:   socket.id,
-      playerName: player.name,
-      players:    publicPlayers(gameState),
-    });
-
-    if (gameState.phase === 'voting') {
-      const alive = getAlivePlayers(gameState);
-      if (alive.length > 0 && gameState.votes.size >= alive.length) {
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = null;
-        setTimeout(finishVoting, 800);
+    if (!currentRoomId) return;
+    const state = getRoom(currentRoomId);
+    if (state) {
+      const wasHost = state.players.get(socket.id)?.isHost;
+      state.players.delete(socket.id);
+      if (wasHost && state.players.size > 0) {
+        const newHost = getAlivePlayers(state)[0] || Array.from(state.players.values())[0];
+        if (newHost) newHost.isHost = true;
       }
-      if (alive.length <= gameState.survivorsTarget) {
-        if (timerInterval) clearInterval(timerInterval);
-        timerInterval = null;
-        finishVoting();
-      }
+      setRoom(currentRoomId, state);
+      io.to(currentRoomId).emit('playerLeft', {
+        playerId: socket.id,
+        playerName: state.players.get(socket.id)?.name || 'Игрок',
+        players: publicPlayers(state),
+      });
+      cleanupRoomIfEmpty(currentRoomId);
     }
+    socket.leave(currentRoomId);
+    currentRoomId = null;
   });
 });
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, () => {
-  console.log(`\n🚀 Сервер запущен: http://localhost:${PORT}\n`);
+  console.log(`🚀 Сервер запущен на порту ${PORT}`);
 });

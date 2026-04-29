@@ -1,7 +1,7 @@
 import { io } from 'socket.io-client';
 
-// Пустой адрес — подключение к тому же хосту и порту, откуда пришла HTML-страница
-const socket = io({
+// Подключение к серверу на Railway
+const socket = io('survivors-game-production.up.railway.app', {
   autoConnect: true,
   reconnectionDelay: 1000,
 });

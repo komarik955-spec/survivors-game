@@ -1,0 +1,18 @@
+# Зависимости
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Сборки и временные файлы
+client/dist/
+dist/
+android/
+ios/
+*.log
+.DS_Store
+
+# Capacitor
+capacitor.config.json
+
+# Системные файлы
+Thumbs.db

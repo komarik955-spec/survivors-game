@@ -8,6 +8,7 @@ import VotingScreen from './components/VotingScreen.jsx';
 import ResultScreen from './components/ResultScreen.jsx';
 import EndScreen  from './components/EndScreen.jsx';
 import ToastArea  from './components/ToastArea.jsx';
+import RoomSelector from './components/RoomSelector.jsx'; // новый компонент
 
 // ─── НАЧАЛЬНОЕ СОСТОЯНИЕ ─────────────────────────────
 const INIT = {
@@ -32,6 +33,8 @@ const INIT = {
 export default function App() {
   const [g, setG] = useState(INIT);
   const [toasts, setToasts] = useState([]);
+  const [roomId, setRoomId] = useState(null);        // текущая комната
+  const [roomError, setRoomError] = useState(null);  // ошибка при входе в комнату
   const toastId = useRef(0);
 
   const toast = useCallback((text, type = 'info') => {
@@ -131,6 +134,7 @@ export default function App() {
     });
 
     socket.on('gameReset', ({ players }) => {
+      console.log('🔄 gameReset получен, players:', players);
       setG(prev => {
         const me = players.find(p => p.id === prev.playerId);
         return {
@@ -155,11 +159,35 @@ export default function App() {
       if (g.screen !== 'login') toast('Соединение восстановлено', 'info');
     });
 
+    // ─── НОВЫЕ ОБРАБОТЧИКИ ДЛЯ КОМНАТ ──────────────
+    socket.on('roomCreated', ({ roomId }) => {
+      setRoomId(roomId);
+      setRoomError(null);
+      // после создания показываем логин
+      setG(prev => ({ ...prev, screen: 'login' }));
+    });
+
+    socket.on('roomJoined', ({ playerId, isHost }) => {
+      setRoomId(roomId); // сохраняем тот же roomId
+      setRoomError(null);
+      setG(prev => ({ ...prev, playerId, isHost, screen: 'login' }));
+    });
+
+    socket.on('roomError', ({ message }) => {
+      setRoomError(message);
+    });
+
     return () => socket.removeAllListeners();
   }, []);
 
   // ─── ACTIONS ──────────────────────────────────────
   const actions = {
+    createRoom: () => {
+      socket.emit('createRoom');
+    },
+    joinRoom: (code) => {
+      socket.emit('joinRoom', { roomId: code });
+    },
     join: (name) => socket.emit('joinGame', { name }),
     startGame: (survivorsCount, timerDuration) =>
       socket.emit('startGame', { survivorsCount, timerDuration }),
@@ -173,6 +201,11 @@ export default function App() {
   // ─── RENDER ───────────────────────────────────────
   const myPlayer = g.players.find(p => p.id === g.playerId);
   const isAlive = myPlayer?.status === 'alive';
+
+  // Если ещё нет комнаты, показываем выбор комнаты
+  if (!roomId && (g.screen === 'login' || g.screen === 'lobby')) {
+    return <RoomSelector onCreateRoom={actions.createRoom} onJoinRoom={actions.joinRoom} error={roomError} />;
+  }
 
   return (
     <>
