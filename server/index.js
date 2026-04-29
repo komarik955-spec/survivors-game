@@ -191,32 +191,49 @@ function resetGameToLobby(roomId) {
 io.on('connection', (socket) => {
   let currentRoomId = null; // комната, в которой находится сокет
 
-socket.on('createRoom', () => {
-  const roomId = generateUniqueRoomId();
-  createRoom(roomId);
-  currentRoomId = roomId;
-  socket.join(roomId);
-  socket.emit('roomCreated', { roomId });
-  console.log(`🆕 [${roomId}] Создана комната, создатель: ${socket.id}`);
-});
+  socket.on('createRoom', () => {
+    const roomId = generateUniqueRoomId();
+    createRoom(roomId);
+    currentRoomId = roomId;
+    socket.join(roomId);
+    socket.emit('roomCreated', { roomId });
+    console.log(`🆕 [${roomId}] Создана комната, создатель: ${socket.id}`);
+  });
 
-  socket.on('joinRoom', ({ roomId, name }, callback) => {
-    let state = getRoom(roomId);
+  // Упрощённый joinRoom – только присоединение к комнате без добавления игрока
+  socket.on('joinRoom', ({ roomId }) => {
+    const state = getRoom(roomId);
     if (!state) {
-      callback({ error: 'Комната не найдена' });
+      socket.emit('roomError', { message: 'Комната не найдена' });
+      return;
+    }
+    currentRoomId = roomId;
+    socket.join(roomId);
+    socket.emit('roomJoined', { playerId: socket.id, isHost: false });
+    console.log(`🚪 [${roomId}] Игрок ${socket.id} присоединился к комнате`);
+  });
+
+  // Добавление игрока в игру (после ввода имени)
+  socket.on('joinGame', ({ name }) => {
+    if (!currentRoomId) {
+      socket.emit('gameError', 'Нет активной комнаты');
+      return;
+    }
+    let state = getRoom(currentRoomId);
+    if (!state) {
+      socket.emit('gameError', 'Комната не найдена');
       return;
     }
     const res = handleJoin(state, socket.id, name);
     if (res.error) {
-      callback({ error: res.error });
+      socket.emit('gameError', res.error);
       return;
     }
-    setRoom(roomId, res.state);
-    currentRoomId = roomId;
-    socket.join(roomId);
+    setRoom(currentRoomId, res.state);
     const me = res.state.players.get(socket.id);
-    callback({ playerId: socket.id, isHost: me.isHost });
-    io.to(roomId).emit('updatePlayers', { players: publicPlayers(res.state) });
+    socket.emit('joinedGame', { playerId: socket.id, isHost: me.isHost });
+    io.to(currentRoomId).emit('updatePlayers', { players: publicPlayers(res.state) });
+    console.log(`👤 [${currentRoomId}] ${name} (${socket.id}) присоединился к игре`);
   });
 
   socket.on('leaveRoom', () => {
