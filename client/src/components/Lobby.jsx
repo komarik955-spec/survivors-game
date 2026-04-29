@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Lobby({ players, playerId, isHost, onStart }) {
+export default function Lobby({ players, playerId, isHost, roomId, onStart }) {
   const [survivorsCount, setSurvivorsCount] = useState(2);
   const [timerDuration,  setTimerDuration]  = useState(120);
 
@@ -13,6 +13,13 @@ export default function Lobby({ players, playerId, isHost, onStart }) {
       Math.min(survivorsCount, maxSurv),
       timerDuration,
     );
+  };
+
+  const copyRoomCode = () => {
+    if (roomId) {
+      navigator.clipboard.writeText(roomId);
+      alert('Код комнаты скопирован!');
+    }
   };
 
   return (
@@ -37,6 +44,18 @@ export default function Lobby({ players, playerId, isHost, onStart }) {
         </div>
 
         <div style={s.body}>
+
+          {/* ─── КОД КОМНАТЫ (только для хоста? нет, для всех) ─── */}
+          {roomId && (
+            <div style={s.roomCodeCard}>
+              <div style={s.roomCodeLabel}>Код комнаты</div>
+              <div style={s.roomCodeValue}>{roomId}</div>
+              <button onClick={copyRoomCode} style={s.copyBtn}>
+                📋 Скопировать
+              </button>
+            </div>
+          )}
+
           {/* Список игроков */}
           <div style={s.section}>
             <div style={s.sectionHead}>
@@ -240,6 +259,48 @@ const s = {
     animation: 'blink 1.4s ease infinite',
   },
   body: { padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24 },
+
+  // ─── НОВЫЙ БЛОК КОДА КОМНАТЫ ───
+  roomCodeCard: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+    background: 'var(--surface2)',
+    border: '1px solid var(--amber)',
+    padding: '14px 18px',
+    borderRadius: '4px',
+    marginBottom: '8px',
+  },
+  roomCodeLabel: {
+    fontFamily: 'var(--font-head)',
+    fontSize: 12,
+    color: 'var(--text-dim)',
+    letterSpacing: '0.1em',
+  },
+  roomCodeValue: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: 'var(--amber)',
+    letterSpacing: '0.1em',
+    flex: 1,
+    textAlign: 'center',
+  },
+  copyBtn: {
+    background: 'var(--surface3)',
+    border: '1px solid var(--border)',
+    color: 'var(--amber)',
+    fontFamily: 'var(--font-head)',
+    fontSize: 12,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    transition: '0.1s',
+    borderRadius: '4px',
+  },
+
+  // ... остальные стили остаются без изменений
   section: { display: 'flex', flexDirection: 'column', gap: 12 },
   sectionHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: {

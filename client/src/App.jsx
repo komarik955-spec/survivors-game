@@ -214,13 +214,14 @@ export default function App() {
       {g.screen === 'login' && <Login onJoin={actions.join} />}
 
       {g.screen === 'lobby' && (
-        <Lobby
-          players={g.players}
-          playerId={g.playerId}
-          isHost={g.isHost}
-          onStart={actions.startGame}
-        />
-      )}
+  <Lobby
+    players={g.players}
+    playerId={g.playerId}
+    isHost={g.isHost}
+    roomId={roomId}
+    onStart={actions.startGame}
+  />
+)}
 
       {g.screen === 'game' && (
         <GameScreen
