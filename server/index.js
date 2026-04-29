@@ -191,14 +191,14 @@ function resetGameToLobby(roomId) {
 io.on('connection', (socket) => {
   let currentRoomId = null; // комната, в которой находится сокет
 
-  socket.on('createRoom', (_, callback) => {
-    const roomId = generateUniqueRoomId();
-    createRoom(roomId); // создаём комнату с пустым состоянием
-    currentRoomId = roomId;
-    socket.join(roomId);
-    console.log(`🆕 [${roomId}] Создана комната, создатель: ${socket.id}`);
-    callback({ roomId });
-  });
+socket.on('createRoom', () => {
+  const roomId = generateUniqueRoomId();
+  createRoom(roomId);
+  currentRoomId = roomId;
+  socket.join(roomId);
+  socket.emit('roomCreated', { roomId });
+  console.log(`🆕 [${roomId}] Создана комната, создатель: ${socket.id}`);
+});
 
   socket.on('joinRoom', ({ roomId, name }, callback) => {
     let state = getRoom(roomId);
