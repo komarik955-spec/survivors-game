@@ -36,6 +36,7 @@ app.get('*', (req, res) => {
 });
 let gameState    = createGame();
 let timerInterval = null;
+let autoResetTimeout = null; // для таймера автоматического сброса
 
 // ============================================================
 //  ПУБЛИЧНЫЙ СНАПШОТ (без приватных карт)
@@ -58,10 +59,14 @@ function publicPlayers(state) {
 
 function clearTimers() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+  if (autoResetTimeout) { clearTimeout(autoResetTimeout); autoResetTimeout = null; }
 }
 
 function startCountdown(seconds, phase, onDone) {
-  clearTimers();
+  clearTimers(); // очищаем только таймер обратного отсчёта, но не autoResetTimeout? Лучше разделить.
+  // Но в старом clearTimers чистил всё. Перепишем, чтобы не мешать автосбросу.
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
   let remaining = seconds;
   io.emit('timerUpdate', { remaining, phase });
 
@@ -69,10 +74,44 @@ function startCountdown(seconds, phase, onDone) {
     remaining -= 1;
     io.emit('timerUpdate', { remaining, phase });
     if (remaining <= 0) {
-      clearTimers();
+      clearInterval(timerInterval);
+      timerInterval = null;
       onDone();
     }
   }, 1000);
+}
+
+// ============================================================
+//  СБРОС ИГРЫ В ЛОББИ (без привязки к хосту)
+// ============================================================
+
+function resetGameToLobby() {
+  // Не сбрасываем, если игра не в состоянии 'ended' или если уже идёт сброс
+  if (gameState.phase !== 'ended') return;
+  console.log('🔄 Автоматический сброс игры в лобби...');
+
+  const savedPlayers = new Map();
+  let first = true;
+  gameState.players.forEach((p, id) => {
+    savedPlayers.set(id, {
+      id: p.id,
+      name: p.name,
+      isHost: first,
+      status: 'alive',
+      cards: null,
+      openedCards: {},
+      cardsOpenedThisRound: 0,
+    });
+    first = false;
+  });
+
+  gameState = createGame();
+  gameState.players = savedPlayers;
+  gameState.phase = 'lobby';
+  gameState.roundEvent = null; // событие сбрасывается
+
+  io.emit('gameReset', { players: publicPlayers(gameState) });
+  console.log('✅ Игра сброшена в лобби (автоматически)');
 }
 
 // ============================================================
@@ -120,7 +159,9 @@ function startVoting() {
 }
 
 function finishVoting() {
-  clearTimers();
+  // Очищаем только таймер обратного отсчёта, но не автосброс (если он был)
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = null;
 
   const result    = processVotingResult(gameState);
   const eliminated = gameState.players.get(result.eliminatedId);
@@ -151,7 +192,13 @@ function finishVoting() {
     setTimeout(startDiscussion, 6000);
   } else {
     gameState.phase = 'ended';
-    console.log('🏁 Игра окончена');
+    console.log('🏁 Игра окончена. Через 10 секунд сбросим в лобби...');
+    // Отменяем предыдущий таймер автосброса (если был)
+    if (autoResetTimeout) clearTimeout(autoResetTimeout);
+    autoResetTimeout = setTimeout(() => {
+      autoResetTimeout = null;
+      resetGameToLobby();
+    }, 10000);
   }
 }
 
@@ -246,7 +293,8 @@ io.on('connection', (socket) => {
     });
 
     if (res.votingComplete) {
-      clearTimers();
+      clearInterval(timerInterval);
+      timerInterval = null;
       setTimeout(finishVoting, 800);
     }
   });
@@ -266,7 +314,8 @@ io.on('connection', (socket) => {
     });
 
     if (res.startVoting) {
-      clearTimers();
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = null;
       startVoting();
     }
   });
@@ -292,7 +341,17 @@ io.on('connection', (socket) => {
     const me = gameState.players.get(socket.id);
     if (!me) return;
 
-    clearTimers();
+    // Если игра ещё не закончилась, но кто-то (хост) просит сбросить – можно, но предусмотрим
+    if (gameState.phase !== 'ended' && gameState.phase !== 'lobby') {
+      // Не разрешаем сброс во время игры, только после окончания или в лобби
+      socket.emit('gameError', 'Сброс возможен только после окончания игры');
+      return;
+    }
+
+    clearInterval(timerInterval);
+    timerInterval = null;
+    if (autoResetTimeout) clearTimeout(autoResetTimeout);
+    autoResetTimeout = null;
 
     const savedPlayers = new Map();
     savedPlayers.set(socket.id, {
@@ -355,11 +414,13 @@ io.on('connection', (socket) => {
     if (gameState.phase === 'voting') {
       const alive = getAlivePlayers(gameState);
       if (alive.length > 0 && gameState.votes.size >= alive.length) {
-        clearTimers();
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
         setTimeout(finishVoting, 800);
       }
       if (alive.length <= gameState.survivorsTarget) {
-        clearTimers();
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = null;
         finishVoting();
       }
     }
