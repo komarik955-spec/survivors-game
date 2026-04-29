@@ -1,37 +1,42 @@
-// roomManager.js
-const { createGame, handleJoin, handleStartGame, handleOpenCard, handleVote, handleForceVoting, processVotingResult, generateNewRoundEvent, getAlivePlayers } = require('./gameLogic');
+const { createGame } = require('./gameLogic');
 
-const rooms = new Map(); // roomId -> gameState
+const rooms = new Map();
+const roomTimers = new Map();
 
-// Генерация короткого ID комнаты (например, 6 символов)
-function generateRoomId() {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
-}
-
-// Создать новую комнату
-function createRoom() {
-  const roomId = generateRoomId();
-  rooms.set(roomId, createGame());
-  return roomId;
-}
-
-// Получить состояние комнаты (если её нет, можно создать? лучше явно)
-function getRoom(roomId) {
-  return rooms.get(roomId);
-}
-
-// Удалить комнату если она пуста
-function cleanupRoom(roomId) {
-  const room = rooms.get(roomId);
-  if (room && room.players.size === 0) {
+function getRoom(roomId) { return rooms.get(roomId); }
+function setRoom(roomId, state) { rooms.set(roomId, state); }
+function createRoom(roomId) { rooms.set(roomId, createGame()); }
+function cleanupRoomIfEmpty(roomId) {
+  const state = rooms.get(roomId);
+  if (state && state.players.size === 0) {
     rooms.delete(roomId);
+    roomTimers.delete(roomId);
     console.log(`🗑️ Комната ${roomId} удалена (пуста)`);
   }
 }
-
-// Обновить состояние комнаты
-function setRoom(roomId, state) {
-  rooms.set(roomId, state);
+function getRoomTimers(roomId) { return roomTimers.get(roomId) || {}; }
+function setRoomTimer(roomId, name, timer) {
+  if (!roomTimers.has(roomId)) roomTimers.set(roomId, {});
+  const timers = roomTimers.get(roomId);
+  if (timers[name]) clearTimeout(timers[name]);
+  timers[name] = timer;
+}
+function clearRoomTimer(roomId, name) {
+  const timers = roomTimers.get(roomId);
+  if (timers && timers[name]) {
+    clearTimeout(timers[name]);
+    delete timers[name];
+  }
+}
+function clearAllRoomTimers(roomId) {
+  const timers = roomTimers.get(roomId);
+  if (timers) {
+    Object.values(timers).forEach(timer => clearTimeout(timer));
+    roomTimers.delete(roomId);
+  }
 }
 
-module.exports = { rooms, createRoom, getRoom, setRoom, cleanupRoom, generateRoomId };
+module.exports = {
+  getRoom, setRoom, createRoom, cleanupRoomIfEmpty,
+  getRoomTimers, setRoomTimer, clearRoomTimer, clearAllRoomTimers
+};
