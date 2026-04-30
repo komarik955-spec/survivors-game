@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function Lobby({ players, playerId, isHost, roomId, onStart }) {
+export default function Lobby({ players, playerId, isHost, roomId, onStart, messages, onSendChat, onLeave }) {
   const [survivorsCount, setSurvivorsCount] = useState(2);
   const [timerDuration,  setTimerDuration]  = useState(120);
 
@@ -45,14 +45,19 @@ export default function Lobby({ players, playerId, isHost, roomId, onStart }) {
 
         <div style={s.body}>
 
-          {/* ─── КОД КОМНАТЫ (только для хоста? нет, для всех) ─── */}
+          {/* ─── КОД КОМНАТЫ ─── */}
           {roomId && (
             <div style={s.roomCodeCard}>
               <div style={s.roomCodeLabel}>Код комнаты</div>
               <div style={s.roomCodeValue}>{roomId}</div>
-              <button onClick={copyRoomCode} style={s.copyBtn}>
-                📋 Скопировать
-              </button>
+              <div style={s.buttonGroup}>
+                <button onClick={copyRoomCode} style={s.copyBtn}>
+                  📋 Скопировать
+                </button>
+                <button onClick={onLeave} style={s.leaveBtn}>
+                  🚪 Выйти
+                </button>
+              </div>
             </div>
           )}
 
@@ -259,8 +264,6 @@ const s = {
     animation: 'blink 1.4s ease infinite',
   },
   body: { padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24 },
-
-  // ─── НОВЫЙ БЛОК КОДА КОМНАТЫ ───
   roomCodeCard: {
     display: 'flex',
     alignItems: 'center',
@@ -288,6 +291,10 @@ const s = {
     flex: 1,
     textAlign: 'center',
   },
+  buttonGroup: {
+    display: 'flex',
+    gap: 8,
+  },
   copyBtn: {
     background: 'var(--surface3)',
     border: '1px solid var(--border)',
@@ -299,8 +306,17 @@ const s = {
     transition: '0.1s',
     borderRadius: '4px',
   },
-
-  // ... остальные стили остаются без изменений
+  leaveBtn: {
+    background: 'transparent',
+    border: '1px solid var(--red)',
+    color: 'var(--red)',
+    fontFamily: 'var(--font-head)',
+    fontSize: 12,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    transition: '0.1s',
+  },
   section: { display: 'flex', flexDirection: 'column', gap: 12 },
   sectionHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: {

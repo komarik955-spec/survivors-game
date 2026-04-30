@@ -188,23 +188,29 @@ export default function App() {
   }, [pendingRoomId]); // добавили зависимость, чтобы обработчик видел актуальное значение
 
   // ─── ACTIONS ──────────────────────────────────────
-  const actions = {
-    createRoom: () => {
-      socket.emit('createRoom');
-    },
-    joinRoom: (code) => {
-      setPendingRoomId(code);            // запоминаем, какую комнату просим
-      socket.emit('joinRoom', { roomId: code });
-    },
-    join: (name) => socket.emit('joinGame', { name }),
-    startGame: (survivorsCount, timerDuration) =>
-      socket.emit('startGame', { survivorsCount, timerDuration }),
-    openCard: (cardType) => socket.emit('openCard', { cardType }),
-    vote: (targetId) => socket.emit('vote', { targetId }),
-    requestForceVoting: () => socket.emit('requestForceVoting'),
-    sendChat: (text) => socket.emit('sendChat', { text }),
-    resetGame: () => socket.emit('resetGame'),
-  };
+const actions = {
+  createRoom: () => {
+    socket.emit('createRoom');
+  },
+  joinRoom: (code) => {
+    setPendingRoomId(code);
+    socket.emit('joinRoom', { roomId: code });
+  },
+  join: (name) => socket.emit('joinGame', { name }),
+  startGame: (survivorsCount, timerDuration) => {
+    socket.emit('startGame', { survivorsCount, timerDuration });
+  },
+  openCard: (cardType) => socket.emit('openCard', { cardType }),
+  vote: (targetId) => socket.emit('vote', { targetId }),
+  requestForceVoting: () => socket.emit('requestForceVoting'),
+  sendChat: (text) => socket.emit('sendChat', { text }),
+  resetGame: () => socket.emit('resetGame'),
+  leaveRoom: () => {
+    socket.emit('leaveRoom');
+    setRoomId(null);
+    setG(prev => ({ ...prev, screen: 'login' }));
+  },
+};
 
   // ─── RENDER ───────────────────────────────────────
   const myPlayer = g.players.find(p => p.id === g.playerId);
@@ -222,14 +228,17 @@ export default function App() {
       {g.screen === 'login' && <Login onJoin={actions.join} />}
 
       {g.screen === 'lobby' && (
-        <Lobby
-          players={g.players}
-          playerId={g.playerId}
-          isHost={g.isHost}
-          roomId={roomId}
-          onStart={actions.startGame}
-        />
-      )}
+  <Lobby
+    players={g.players}
+    playerId={g.playerId}
+    isHost={g.isHost}
+    roomId={roomId}
+    onStart={actions.startGame}
+    messages={g.messages}
+    onSendChat={actions.sendChat}
+    onLeave={actions.leaveRoom}   // 👈 добавить эту строку
+  />
+)}
 
       {g.screen === 'game' && (
         <GameScreen
