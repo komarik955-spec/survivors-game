@@ -194,17 +194,23 @@ export default function Lobby({ players, playerId, isHost, roomId, onStart, mess
   );
 }
 
-// ─── СТИЛИ ─────────────────────────────────────────────
-
+// ─── СТИЛИ (исправлены: фон на root, container прозрачный, центрирование) ───
 const s = {
   root: {
     minHeight: '100vh',
     display: 'flex',
-    alignItems: 'flex-start',
+    flexDirection: 'column',
+    alignItems: 'center',
     justifyContent: 'center',
     padding: '24px 16px',
     position: 'relative',
     overflow: 'hidden',
+    // Фоновое изображение на весь экран
+    backgroundImage: `url('/images/bg-lobby.jpg')`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundBlendMode: 'overlay',
   },
   grid: {
     position: 'fixed', inset: 0,
@@ -218,11 +224,7 @@ const s = {
   container: {
     width: '100%',
     maxWidth: 600,
-    backgroundImage: `url('/images/bg-lobby.jpg')`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    backgroundBlendMode: 'overlay',
+    background: 'transparent', // убираем фон, чтобы не перекрывать изображение
     border: '1px solid var(--border)',
     position: 'relative',
     zIndex: 1,
