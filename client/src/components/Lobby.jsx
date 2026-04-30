@@ -208,15 +208,21 @@ const s = {
     backgroundSize: '48px 48px',
     pointerEvents: 'none',
   },
-  container: {
-    width: '100%',
-    maxWidth: 600,
-    background: 'var(--surface)',
-    border: '1px solid var(--border)',
-    position: 'relative',
-    zIndex: 1,
-    marginTop: 0,
-  },
+container: {
+  width: '100%',
+  maxWidth: 600,
+  backgroundImage: `url('/images/bg-lobby.jpg')`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  backgroundBlendMode: 'overlay',
+  // остальные свойства (border, background: var(--surface) – уберите или оставьте как fallback)
+  background: 'var(--surface)', // если оставить, он перекроет картинку, поэтому лучше убрать
+  border: '1px solid var(--border)',
+  position: 'relative',
+  zIndex: 1,
+  marginTop: 0,
+},
   header: { background: 'var(--bg)' },
   stripe: {
     height: 5,

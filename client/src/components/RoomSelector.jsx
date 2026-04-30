@@ -59,7 +59,11 @@ const styles = {
     alignItems: 'center',
     justifyContent: 'center',
     minHeight: '100vh',
-    background: 'var(--bg)',
+    backgroundImage: `url('/images/bg-main.jpg')`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundBlendMode: 'overlay',   // ← исправлено
     color: 'var(--text)',
     padding: '20px',
   },
