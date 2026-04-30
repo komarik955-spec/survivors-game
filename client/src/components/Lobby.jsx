@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import HowToPlay from './HowToPlay.jsx';
 
 export default function Lobby({ players, playerId, isHost, roomId, onStart, messages, onSendChat, onLeave }) {
   const [survivorsCount, setSurvivorsCount] = useState(2);
   const [timerDuration,  setTimerDuration]  = useState(120);
+  const [showRules, setShowRules] = useState(false);
 
   const alive    = players.filter(p => p.status === 'alive');
   const canStart = isHost && alive.length >= 2;
@@ -56,6 +58,9 @@ export default function Lobby({ players, playerId, isHost, roomId, onStart, mess
                 </button>
                 <button onClick={onLeave} style={s.leaveBtn}>
                   🚪 Выйти
+                </button>
+                <button onClick={() => setShowRules(true)} style={s.rulesBtn}>
+                  ❓
                 </button>
               </div>
             </div>
@@ -176,6 +181,8 @@ export default function Lobby({ players, playerId, isHost, roomId, onStart, mess
         </div>
       </div>
 
+      <HowToPlay isOpen={showRules} onClose={() => setShowRules(false)} />
+
       <style>{`
         @keyframes blink {
           0%,100% { opacity: 1; }
@@ -208,21 +215,19 @@ const s = {
     backgroundSize: '48px 48px',
     pointerEvents: 'none',
   },
-container: {
-  width: '100%',
-  maxWidth: 600,
-  backgroundImage: `url('/images/bg-lobby.jpg')`,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  backgroundColor: 'rgba(0,0,0,0.7)',
-  backgroundBlendMode: 'overlay',
-  // остальные свойства (border, background: var(--surface) – уберите или оставьте как fallback)
-  background: 'var(--surface)', // если оставить, он перекроет картинку, поэтому лучше убрать
-  border: '1px solid var(--border)',
-  position: 'relative',
-  zIndex: 1,
-  marginTop: 0,
-},
+  container: {
+    width: '100%',
+    maxWidth: 600,
+    backgroundImage: `url('/images/bg-lobby.jpg')`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundBlendMode: 'overlay',
+    border: '1px solid var(--border)',
+    position: 'relative',
+    zIndex: 1,
+    marginTop: 0,
+  },
   header: { background: 'var(--bg)' },
   stripe: {
     height: 5,
@@ -322,6 +327,16 @@ container: {
     cursor: 'pointer',
     borderRadius: '4px',
     transition: '0.1s',
+  },
+  rulesBtn: {
+    background: 'transparent',
+    border: '1px solid var(--amber)',
+    color: 'var(--amber)',
+    fontFamily: 'var(--font-head)',
+    fontSize: 12,
+    padding: '6px 12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
   },
   section: { display: 'flex', flexDirection: 'column', gap: 12 },
   sectionHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },

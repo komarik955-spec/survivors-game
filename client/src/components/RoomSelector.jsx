@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import HowToPlay from './HowToPlay.jsx';
 
 export default function RoomSelector({ onCreateRoom, onJoinRoom, error }) {
   const [roomCode, setRoomCode] = useState('');
   const [mode, setMode] = useState(null); // 'create' или 'join'
+  const [showRules, setShowRules] = useState(false);
 
   const handleCreate = () => {
     onCreateRoom();
@@ -48,6 +50,10 @@ export default function RoomSelector({ onCreateRoom, onJoinRoom, error }) {
       <h1>Выжившие</h1>
       <button onClick={() => setMode('create')} style={styles.button}>Создать новую игру</button>
       <button onClick={() => setMode('join')} style={styles.button}>Присоединиться к игре</button>
+      <button onClick={() => setShowRules(true)} style={styles.buttonSecondary}>
+        ❓ КАК ИГРАТЬ?
+      </button>
+      <HowToPlay isOpen={showRules} onClose={() => setShowRules(false)} />
     </div>
   );
 }
@@ -63,7 +69,7 @@ const styles = {
     backgroundSize: 'cover',
     backgroundPosition: 'center',
     backgroundColor: 'rgba(0,0,0,0.7)',
-    backgroundBlendMode: 'overlay',   // ← исправлено
+    backgroundBlendMode: 'overlay',
     color: 'var(--text)',
     padding: '20px',
   },
@@ -85,6 +91,7 @@ const styles = {
     color: 'var(--amber)',
     border: '1px solid var(--amber)',
     cursor: 'pointer',
+    fontFamily: 'var(--font-head)',
   },
   input: {
     padding: '10px',
