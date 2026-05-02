@@ -7,48 +7,51 @@ const cors = require('cors');
 const {
   createGame,
   handleJoin,
-  handleToggleReady, // ✅ ДОБАВИЛИ
+  handleToggleReady,
   handleStartGame,
-  handleOpenCard,
-  handleVote,
-  handleForceVoting,
-  processVotingResult,
-  generateNewRoundEvent,
   getAlivePlayers,
 } = require('./gameLogic');
 
 const {
-  getRoom, setRoom, createRoom, cleanupRoomIfEmpty,
-  getRoomTimers, setRoomTimer, clearRoomTimer, clearAllRoomTimers
+  getRoom, setRoom, createRoom, cleanupRoomIfEmpty
 } = require('./roomManager');
 
 const app = express();
 const server = http.createServer(app);
+
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 
-app.use(cors());
-app.use(express.static(path.join(__dirname, '../client/dist')));
+// =====================================================
+// 🔥 СТАТИКА (ФИКС ЧЁРНОГО ЭКРАНА)
+// =====================================================
 
+const distPath = path.join(__dirname, '../client/dist');
+
+app.use(cors());
+app.use(express.static(distPath));
+
+// health check
 app.get('/health', (_, res) => res.json({ ok: true }));
 
+// fallback ТОЛЬКО для страниц
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, '../client/dist/index.html'));
+  if (req.path.startsWith('/socket.io')) return;
+  res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// ------------------------------------------------------------
-//  Утилиты
-// ------------------------------------------------------------
+// =====================================================
+// УТИЛИТЫ
+// =====================================================
+
 function publicPlayers(state) {
   return Array.from(state.players.entries()).map(([id, p]) => ({
     id,
     name: p.name,
     isHost: p.isHost,
     status: p.status,
-    ready: p.ready || false, // ✅ ДОБАВИЛИ
-    openedCards: p.openedCards,
-    cardsOpenedThisRound: p.cardsOpenedThisRound,
+    ready: p.ready || false,
   }));
 }
 
@@ -60,27 +63,37 @@ function generateUniqueRoomId() {
   return id;
 }
 
-// ------------------------------------------------------------
-//  Socket.IO
-// ------------------------------------------------------------
+// =====================================================
+// SOCKET.IO
+// =====================================================
+
 io.on('connection', (socket) => {
   let currentRoomId = null;
 
+  // -------------------------
   // СОЗДАНИЕ КОМНАТЫ
+  // -------------------------
   socket.on('createRoom', () => {
     const roomId = generateUniqueRoomId();
+
+    const state = createGame();
     createRoom(roomId);
+    setRoom(roomId, state);
+
     currentRoomId = roomId;
 
     socket.join(roomId);
     socket.emit('roomCreated', { roomId });
 
-    console.log(`🆕 [${roomId}] Создана комната (${socket.id})`);
+    console.log(`🆕 [${roomId}] создана`);
   });
 
+  // -------------------------
   // ВХОД В КОМНАТУ
+  // -------------------------
   socket.on('joinRoom', ({ roomId }) => {
     const state = getRoom(roomId);
+
     if (!state) {
       socket.emit('roomError', { message: 'Комната не найдена' });
       return;
@@ -94,10 +107,12 @@ io.on('connection', (socket) => {
       isHost: false
     });
 
-    console.log(`🚪 [${roomId}] ${socket.id} вошёл`);
+    console.log(`🚪 [${roomId}] подключение`);
   });
 
+  // -------------------------
   // ДОБАВЛЕНИЕ В ИГРУ
+  // -------------------------
   socket.on('joinGame', ({ name }) => {
     if (!currentRoomId) return;
 
@@ -125,7 +140,9 @@ io.on('connection', (socket) => {
     });
   });
 
-  // 🔥 ГОТОВ / НЕ ГОТОВ
+  // -------------------------
+  // READY
+  // -------------------------
   socket.on('toggleReady', () => {
     if (!currentRoomId) return;
 
@@ -144,12 +161,12 @@ io.on('connection', (socket) => {
     io.to(currentRoomId).emit('updatePlayers', {
       players: publicPlayers(res.state)
     });
-
-    console.log(`🔁 [${currentRoomId}] ${socket.id} сменил ready`);
   });
 
+  // -------------------------
   // СТАРТ ИГРЫ
-  socket.on('startGame', ({ survivorsCount, timerDuration }) => {
+  // -------------------------
+  socket.on('startGame', () => {
     if (!currentRoomId) return;
 
     let state = getRoom(currentRoomId);
@@ -158,7 +175,7 @@ io.on('connection', (socket) => {
     const me = state.players.get(socket.id);
     if (!me?.isHost) return;
 
-    const res = handleStartGame(state, survivorsCount, timerDuration);
+    const res = handleStartGame(state, 2, 120);
 
     if (res.error) {
       socket.emit('gameError', res.error);
@@ -172,7 +189,9 @@ io.on('connection', (socket) => {
     });
   });
 
+  // -------------------------
   // ЧАТ
+  // -------------------------
   socket.on('sendChat', ({ text }) => {
     if (!currentRoomId) return;
 
@@ -182,14 +201,19 @@ io.on('connection', (socket) => {
     const player = state.players.get(socket.id);
     if (!player) return;
 
+    const msg = (text || '').trim();
+    if (!msg) return;
+
     io.to(currentRoomId).emit('chatMessage', {
       id: `${socket.id}-${Date.now()}`,
       playerName: player.name,
-      text,
+      text: msg,
     });
   });
 
+  // -------------------------
   // ВЫХОД
+  // -------------------------
   socket.on('disconnect', () => {
     if (!currentRoomId) return;
 
@@ -197,7 +221,6 @@ io.on('connection', (socket) => {
     if (!state) return;
 
     state.players.delete(socket.id);
-
     setRoom(currentRoomId, state);
 
     io.to(currentRoomId).emit('updatePlayers', {
@@ -208,8 +231,10 @@ io.on('connection', (socket) => {
   });
 });
 
+// =====================================================
+
 const PORT = process.env.PORT || 3001;
 
 server.listen(PORT, () => {
-  console.log(`🚀 Сервер запущен на порту ${PORT}`);
+  console.log(`🚀 сервер запущен: ${PORT}`);
 });
