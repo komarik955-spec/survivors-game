@@ -184,11 +184,17 @@ export default function Lobby({
 }
 
 const styles = {
-  root: {
-    minHeight: '100vh',
-    background: 'radial-gradient(circle at top, #0f1115, #050607)',
-    padding: '20px',
-  },
+ root: {
+  minHeight: '100vh',
+  backgroundImage: `url('/images/bg-lobby.jpg')`,
+  backgroundSize: 'cover',
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
+  // затемнение для читаемости текста
+  backgroundColor: 'rgba(0,0,0,0.7)',
+  backgroundBlendMode: 'overlay',
+  padding: '20px',
+},
   container: {
     display: 'flex',
     gap: '20px',
