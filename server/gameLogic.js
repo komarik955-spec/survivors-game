@@ -49,7 +49,7 @@ function handleJoin(state, socketId, name) {
     name: trimmed,
     isHost,
     status: 'alive',
-    ready: false, // 🔥 ДОБАВИЛИ
+    ready: false,
     cards: null,
     openedCards: {},
     cardsOpenedThisRound: 0,
@@ -68,13 +68,9 @@ function handleToggleReady(state, socketId) {
   }
 
   const player = state.players.get(socketId);
-
-  if (!player) {
-    return { error: 'Игрок не найден' };
-  }
+  if (!player) return { error: 'Игрок не найден' };
 
   player.ready = !player.ready;
-
   return { state };
 }
 
@@ -87,7 +83,6 @@ function handleStartGame(state, survivorsCount, timerDuration) {
     return { error: 'Нужно минимум 2 игрока' };
   }
 
-  // 🔥 Проверка готовности (по желанию)
   const allReady = Array.from(state.players.values()).every(p => p.ready);
   if (!allReady) {
     return { error: 'Не все игроки готовы' };
@@ -197,12 +192,92 @@ function handleForceVoting(state, socketId) {
 }
 
 // ============================================================
+//  PROCESS VOTING RESULT
+// ============================================================
+
+function processVotingResult(state) {
+  const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
+  const event  = state.roundEvent;
+  const effect = event?.effect || { type: 'none' };
+
+  const voteCounts = {};
+  alive.forEach(p => { voteCounts[p.id] = 0; });
+
+  state.votes.forEach((targetId) => {
+    if (!voteCounts.hasOwnProperty(targetId)) return;
+
+    if (effect.type === 'penalty' && effect.targetId === targetId) {
+      voteCounts[targetId] += 2;
+    } else {
+      voteCounts[targetId] += 1;
+    }
+  });
+
+  if (effect.type === 'immunity' && voteCounts.hasOwnProperty(effect.targetId)) {
+    voteCounts[effect.targetId] = 0;
+  }
+
+  const allZero = Object.values(voteCounts).every(v => v === 0);
+  if (allZero && alive.length > 0) {
+    const candidates = effect.type === 'immunity'
+      ? alive.filter(p => p.id !== effect.targetId)
+      : alive;
+    const pool = candidates.length ? candidates : alive;
+    const unlucky = pool[Math.floor(Math.random() * pool.length)];
+    return { eliminatedId: unlucky.id, voteCounts, tie: false, noVotes: true };
+  }
+
+  let candidates;
+  if (effect.type === 'protect' && voteCounts.hasOwnProperty(effect.targetId)) {
+    const protectedVotes = voteCounts[effect.targetId];
+    const othersMax = Math.max(
+      ...Object.entries(voteCounts)
+        .filter(([id]) => id !== effect.targetId)
+        .map(([, v]) => v),
+      0
+    );
+    const adjustedCounts = { ...voteCounts };
+    if (protectedVotes - othersMax < 2) {
+      adjustedCounts[effect.targetId] = 0;
+    }
+    const maxV = Math.max(...Object.values(adjustedCounts));
+    candidates = Object.keys(adjustedCounts).filter(id => adjustedCounts[id] === maxV && adjustedCounts[id] > 0);
+    if (!candidates.length) {
+      const unlucky = alive[Math.floor(Math.random() * alive.length)];
+      return { eliminatedId: unlucky.id, voteCounts, tie: false, noVotes: true };
+    }
+  } else {
+    const maxV = Math.max(...Object.values(voteCounts));
+    candidates = Object.keys(voteCounts).filter(id => voteCounts[id] === maxV);
+  }
+
+  const tie = candidates.length > 1;
+  const eliminatedId = candidates[Math.floor(Math.random() * candidates.length)];
+  return { eliminatedId, voteCounts, tie, noVotes: false };
+}
+
+// ============================================================
+//  GENERATE NEW ROUND EVENT
+// ============================================================
+
+function generateNewRoundEvent(state) {
+  const { generateRoundEvent } = require('./events');
+  const alive = Array.from(state.players.values()).filter(p => p.status === 'alive');
+  state.roundEvent = generateRoundEvent(alive);
+  return state;
+}
+
+// ============================================================
 //  HELPERS
 // ============================================================
 
 function getAlivePlayers(state) {
   return Array.from(state.players.values()).filter(p => p.status === 'alive');
 }
+
+// ============================================================
+//  EXPORTS
+// ============================================================
 
 module.exports = {
   createGame,
@@ -214,5 +289,5 @@ module.exports = {
   processVotingResult,
   generateNewRoundEvent,
   getAlivePlayers,
-  handleToggleReady,      // 🔥 НОВАЯ ФУНКЦИЯ
+  handleToggleReady,
 };
