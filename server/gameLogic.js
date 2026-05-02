@@ -207,10 +207,12 @@ function getAlivePlayers(state) {
 module.exports = {
   createGame,
   handleJoin,
-  handleToggleReady, // 🔥 НОВОЕ
   handleStartGame,
   handleOpenCard,
   handleVote,
   handleForceVoting,
+  processVotingResult,
+  generateNewRoundEvent,
   getAlivePlayers,
+  handleToggleReady,      // 🔥 НОВАЯ ФУНКЦИЯ
 };
