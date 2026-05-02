@@ -3,7 +3,7 @@ import HowToPlay from './HowToPlay.jsx';
 
 export default function Lobby({ 
   players, playerId, isHost, roomId, 
-  onStart, onLeave, messages, onSendChat 
+  onStart, onLeave, messages, onSendChat, onToggleReady 
 }) {
   const [mode] = useState('classic');
   const [chatInput, setChatInput] = useState('');
@@ -39,6 +39,10 @@ export default function Lobby({
     navigator.clipboard.writeText(roomId);
   };
 
+  const handleToggleReady = () => {
+    if (onToggleReady) onToggleReady();
+  };
+
   return (
     <div style={styles.root}>
       <div style={styles.container}>
@@ -53,7 +57,7 @@ export default function Lobby({
             {playerSlots.map((player, idx) => {
               const isYou = player?.id === playerId;
               const isHostPlayer = player?.isHost;
-              const isReady = player?.ready; // ⚠️ ожидается поле ready
+              const isReady = player?.ready;
 
               return (
                 <div 
@@ -63,7 +67,6 @@ export default function Lobby({
                     animation: `fadeIn 0.4s ease ${idx * 0.05}s both`
                   }}
                 >
-
                   <div style={styles.playerLeft}>
                     <div style={styles.plusIcon}>
                       {player ? '' : '+'}
@@ -88,13 +91,25 @@ export default function Lobby({
                   {/* ПРАВАЯ ЧАСТЬ СТАТУС */}
                   {player && (
                     <div style={styles.statusBlock}>
-                      <span style={{
-                        ...styles.status,
-                        ...(isReady ? styles.ready : styles.notReady)
-                      }}>
-                        {isReady ? 'Готов' : 'Не готов'}
-                      </span>
-
+                      {isYou ? (
+                        <button 
+                          onClick={handleToggleReady}
+                          style={{
+                            ...styles.status,
+                            ...(isReady ? styles.ready : styles.notReady),
+                            ...styles.readyBtn,
+                          }}
+                        >
+                          {isReady ? 'Готов' : 'Не готов'}
+                        </button>
+                      ) : (
+                        <span style={{
+                          ...styles.status,
+                          ...(isReady ? styles.ready : styles.notReady)
+                        }}>
+                          {isReady ? 'Готов' : 'Не готов'}
+                        </span>
+                      )}
                       {isYou && <span style={styles.youBadge}>Вы</span>}
                     </div>
                   )}
@@ -275,6 +290,7 @@ const styles = {
     fontSize: '13px',
     padding: '4px 10px',
     borderRadius: '6px',
+    cursor: 'pointer',
   },
 
   ready: {
@@ -320,6 +336,8 @@ const styles = {
     border: '1px solid #333',
     color: '#fff',
     padding: '6px 10px',
+    borderRadius: '4px',
+    cursor: 'pointer',
   },
 
   modeCard: {
@@ -328,28 +346,53 @@ const styles = {
     background: '#111318',
   },
 
+  modeLabel: {
+    fontSize: '14px',
+    marginBottom: '8px',
+    color: '#aaa',
+  },
+
+  modeButtons: {
+    display: 'flex',
+    gap: '8px',
+    marginBottom: '16px',
+  },
+
   modeBtn: {
     padding: '8px',
     border: '1px solid #333',
+    background: 'transparent',
     color: '#fff',
+    borderRadius: '4px',
+    cursor: 'pointer',
   },
 
   modeActive: {
     background: '#f5a623',
     color: '#000',
+    borderColor: '#f5a623',
   },
 
   startBtn: {
+    width: '100%',
     background: '#22c55e',
     padding: '10px',
     border: 'none',
+    borderRadius: '6px',
+    color: '#000',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    marginBottom: '10px',
   },
 
   deleteBtn: {
+    width: '100%',
     background: '#ef4444',
     padding: '10px',
     border: 'none',
+    borderRadius: '6px',
     color: '#fff',
+    cursor: 'pointer',
   },
 
   chatCard: {
@@ -363,12 +406,30 @@ const styles = {
   chatHeader: {
     padding: '10px',
     borderBottom: '1px solid #222',
+    fontWeight: 'bold',
   },
 
   chatMessages: {
     flex: 1,
     overflowY: 'auto',
     padding: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+  },
+
+  chatEmpty: {
+    color: '#666',
+    textAlign: 'center',
+  },
+
+  chatMessage: {
+    fontSize: '13px',
+  },
+
+  chatName: {
+    color: '#f5a623',
+    marginRight: '8px',
   },
 
   chatInputRow: {
@@ -381,10 +442,14 @@ const styles = {
     background: '#0b0d10',
     color: '#fff',
     padding: '10px',
+    border: 'none',
+    outline: 'none',
   },
 
   chatSendBtn: {
     background: '#f5a623',
-    padding: '10px',
+    padding: '10px 15px',
+    border: 'none',
+    cursor: 'pointer',
   },
 };

@@ -35,7 +35,7 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [roomId, setRoomId] = useState(null);
   const [roomError, setRoomError] = useState(null);
-  const [pendingRoomId, setPendingRoomId] = useState(null); // временно храним код, который ввёл игрок
+  const [pendingRoomId, setPendingRoomId] = useState(null);
   const toastId = useRef(0);
 
   const toast = useCallback((text, type = 'info') => {
@@ -168,7 +168,6 @@ export default function App() {
     });
 
     socket.on('roomJoined', ({ playerId, isHost }) => {
-      // Используем сохранённый перед отправкой код комнаты
       if (pendingRoomId) {
         setRoomId(pendingRoomId);
         setPendingRoomId(null);
@@ -185,44 +184,43 @@ export default function App() {
     });
 
     return () => socket.removeAllListeners();
-  }, [pendingRoomId]); // добавили зависимость, чтобы обработчик видел актуальное значение
+  }, [pendingRoomId]);
 
   // ─── ACTIONS ──────────────────────────────────────
-const actions = {
-  createRoom: () => {
-    socket.emit('createRoom');
-  },
-  joinRoom: (code) => {
-    setPendingRoomId(code);
-    socket.emit('joinRoom', { roomId: code });
-  },
-  join: (name) => socket.emit('joinGame', { name }),
-startGame: (mode) => {
-  let survivorsCount = 2;
-  let timerDuration = 120;
-  if (mode === 'halloween') {
-    survivorsCount = 3;
-    timerDuration = 150;
-  }
-  socket.emit('startGame', { survivorsCount, timerDuration });
-},
-  openCard: (cardType) => socket.emit('openCard', { cardType }),
-  vote: (targetId) => socket.emit('vote', { targetId }),
-  requestForceVoting: () => socket.emit('requestForceVoting'),
-  sendChat: (text) => socket.emit('sendChat', { text }),
-  resetGame: () => socket.emit('resetGame'),
-  leaveRoom: () => {
-    socket.emit('leaveRoom');
-    setRoomId(null);
-    setG(prev => ({ ...prev, screen: 'login' }));
-  },
-};
+  const actions = {
+    createRoom: () => {
+      socket.emit('createRoom');
+    },
+    joinRoom: (code) => {
+      setPendingRoomId(code);
+      socket.emit('joinRoom', { roomId: code });
+    },
+    join: (name) => socket.emit('joinGame', { name }),
+    startGame: (mode) => {
+      let survivorsCount = 2;
+      let timerDuration = 120;
+      if (mode === 'halloween') {
+        survivorsCount = 3;
+        timerDuration = 150;
+      }
+      socket.emit('startGame', { survivorsCount, timerDuration });
+    },
+    openCard: (cardType) => socket.emit('openCard', { cardType }),
+    vote: (targetId) => socket.emit('vote', { targetId }),
+    requestForceVoting: () => socket.emit('requestForceVoting'),
+    sendChat: (text) => socket.emit('sendChat', { text }),
+    resetGame: () => socket.emit('resetGame'),
+    leaveRoom: () => {
+      socket.emit('leaveRoom');
+      setRoomId(null);
+      setG(prev => ({ ...prev, screen: 'login' }));
+    },
+    toggleReady: () => socket.emit('toggleReady'),   // 🔥 ДОБАВЛЕНО
+  };
 
-  // ─── RENDER ───────────────────────────────────────
   const myPlayer = g.players.find(p => p.id === g.playerId);
   const isAlive = myPlayer?.status === 'alive';
 
-  // Если ещё нет комнаты, показываем выбор комнаты
   if (!roomId && (g.screen === 'login' || g.screen === 'lobby')) {
     return <RoomSelector onCreateRoom={actions.createRoom} onJoinRoom={actions.joinRoom} error={roomError} />;
   }
@@ -234,17 +232,18 @@ startGame: (mode) => {
       {g.screen === 'login' && <Login onJoin={actions.join} />}
 
       {g.screen === 'lobby' && (
-  <Lobby
-    players={g.players}
-    playerId={g.playerId}
-    isHost={g.isHost}
-    roomId={roomId}
-    onStart={actions.startGame}
-    messages={g.messages}
-    onSendChat={actions.sendChat}
-    onLeave={actions.leaveRoom}   // 👈 добавить эту строку
-  />
-)}
+        <Lobby
+          players={g.players}
+          playerId={g.playerId}
+          isHost={g.isHost}
+          roomId={roomId}
+          onStart={actions.startGame}
+          messages={g.messages}
+          onSendChat={actions.sendChat}
+          onLeave={actions.leaveRoom}
+          onToggleReady={actions.toggleReady}   // 🔥 ПЕРЕДАЁМ
+        />
+      )}
 
       {g.screen === 'game' && (
         <GameScreen
