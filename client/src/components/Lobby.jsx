@@ -1,480 +1,571 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import HowToPlay from './HowToPlay.jsx';
 
-export default function Lobby({ players, playerId, isHost, roomId, onStart, messages, onSendChat, onLeave }) {
-  const [survivorsCount, setSurvivorsCount] = useState(2);
-  const [timerDuration,  setTimerDuration]  = useState(120);
+export default function Lobby({ 
+  players, playerId, isHost, roomId, 
+  onStart, onLeave, messages, onSendChat 
+}) {
+  const [mode, setMode] = useState('classic'); // 'classic' или 'halloween'
+  const [chatInput, setChatInput] = useState('');
   const [showRules, setShowRules] = useState(false);
+  const chatEndRef = useRef(null);
 
-  const alive    = players.filter(p => p.status === 'alive');
-  const canStart = isHost && alive.length >= 2;
-  const maxSurv  = Math.max(1, alive.length - 1);
+  const alive = players.filter(p => p.status === 'alive');
+  const maxPlayers = 15;
+  const playerSlots = [];
 
-  const handleStart = () => {
-    onStart(
-      Math.min(survivorsCount, maxSurv),
-      timerDuration,
-    );
+  // Заполняем слоты игроками + пустыми местами до 15
+  for (let i = 0; i < maxPlayers; i++) {
+    if (i < players.length) {
+      playerSlots.push(players[i]);
+    } else {
+      playerSlots.push(null);
+    }
+  }
+
+  // Автоскролл чата
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages]);
+
+  const copyRoomUrl = () => {
+    const url = `${window.location.origin}?room=${roomId}`;
+    navigator.clipboard.writeText(url);
+    alert('Ссылка на комнату скопирована!');
   };
 
   const copyRoomCode = () => {
-    if (roomId) {
-      navigator.clipboard.writeText(roomId);
-      alert('Код комнаты скопирован!');
+    navigator.clipboard.writeText(roomId);
+    alert('Код комнаты скопирован!');
+  };
+
+  const sendChatMessage = () => {
+    const txt = chatInput.trim();
+    if (!txt) return;
+    onSendChat(txt);
+    setChatInput('');
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter') sendChatMessage();
+  };
+
+  const handleStartGame = () => {
+    onStart(mode);
+  };
+
+  const handleDeleteRoom = () => {
+    if (window.confirm('Вы уверены, что хотите удалить комнату? Все игроки будут отключены.')) {
+      onLeave();
     }
   };
 
   return (
-    <div style={s.root}>
-      <div style={s.grid} aria-hidden />
-
-      <div style={s.container} className="fade-in">
-        {/* Заголовок */}
-        <div style={s.header}>
-          <div style={s.stripe} aria-hidden />
-          <div style={s.titleRow}>
-            <div>
-              <span style={s.label}>КОМНАТА ОЖИДАНИЯ</span>
-              <h1 style={s.title}>ВЫЖИВШИЕ</h1>
-            </div>
-            <div style={s.statusBadge}>
-              <span style={s.dot} />
-              <span>ЛОББИ</span>
-            </div>
+    <div style={styles.root}>
+      <div style={styles.container}>
+        {/* Левая колонка: список игроков */}
+        <div style={styles.leftColumn}>
+          <div style={styles.header}>
+            <h1 style={styles.title}>УБЕЖИЩЕ 42</h1>
+            <span style={styles.version}>1.6.9b</span>
           </div>
-          <div style={s.stripe} aria-hidden />
+
+          <div style={styles.playersList}>
+            {playerSlots.map((player, idx) => (
+              <div key={idx} style={styles.playerSlot}>
+                {player ? (
+                  <>
+                    <span style={styles.playerName}>
+                      {player.name}
+                      {player.isHost && <span style={styles.hostBadge}> (Владелец)</span>}
+                    </span>
+                    {player.id === playerId && <span style={styles.youBadge}>Вы</span>}
+                  </>
+                ) : (
+                  <span style={styles.emptySlot}>Пустой слот</span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
 
-        <div style={s.body}>
-
-          {/* ─── КОД КОМНАТЫ ─── */}
-          {roomId && (
-            <div style={s.roomCodeCard}>
-              <div style={s.roomCodeLabel}>Код комнаты</div>
-              <div style={s.roomCodeValue}>{roomId}</div>
-              <div style={s.buttonGroup}>
-                <button onClick={copyRoomCode} style={s.copyBtn}>
-                  📋 Скопировать
-                </button>
-                <button onClick={onLeave} style={s.leaveBtn}>
-                  🚪 Выйти
-                </button>
-                <button onClick={() => setShowRules(true)} style={s.rulesBtn}>
-                  ❓
-                </button>
-              </div>
+        {/* Правая колонка: всё остальное */}
+        <div style={styles.rightColumn}>
+          {/* Код комнаты и ссылка */}
+          <div style={styles.roomCard}>
+            <div style={styles.roomUrl} onClick={copyRoomUrl}>
+              {window.location.origin}/?room={roomId}
             </div>
-          )}
-
-          {/* Список игроков */}
-          <div style={s.section}>
-            <div style={s.sectionHead}>
-              <span style={s.sectionTitle}>ИГРОКИ</span>
-              <span style={s.count}>{alive.length} / 12</span>
-            </div>
-            <div style={s.playerGrid}>
-              {players.map((p, i) => {
-                const isMe = p.id === playerId;
-                return (
-                  <div
-                    key={p.id}
-                    style={{
-                      ...s.playerRow,
-                      borderColor: isMe ? 'var(--amber)' : 'var(--border)',
-                      background:  isMe ? 'var(--amber-glow)' : 'var(--surface2)',
-                    }}
-                    className="fade-in"
-                  >
-                    <span style={s.playerNum}>{String(i + 1).padStart(2, '0')}</span>
-                    <span style={{
-                      ...s.playerName,
-                      color: isMe ? 'var(--amber)' : 'var(--text-bright)',
-                    }}>
-                      {p.name}
-                    </span>
-                    <div style={s.playerBadges}>
-                      {p.isHost && <span style={s.badgeHost}>ХОСТ</span>}
-                      {isMe     && <span style={s.badgeMe}>ВЫ</span>}
-                    </div>
-                  </div>
-                );
-              })}
-
-              {/* Пустые слоты */}
-              {Array.from({ length: Math.max(0, 4 - players.length) }).map((_, i) => (
-                <div key={`empty-${i}`} style={s.emptySlot}>
-                  <span style={s.emptyText}>— ожидание игрока —</span>
-                </div>
-              ))}
+            <div style={styles.roomCodeRow}>
+              <span style={styles.roomCodeLabel}>Код комнаты:</span>
+              <span style={styles.roomCode}>{roomId}</span>
+              <button onClick={copyRoomCode} style={styles.copyBtn}>📋</button>
             </div>
           </div>
 
-          {/* Настройки (только хост) */}
-          {isHost && (
-            <div style={s.section}>
-              <span style={s.sectionTitle}>НАСТРОЙКИ</span>
-              <div style={s.settings}>
-                <label style={s.settingRow}>
-                  <div>
-                    <div style={s.settingLabel}>Выживших в конце</div>
-                    <div style={s.settingHint}>Сколько игроков остаётся — игра заканчивается</div>
-                  </div>
-                  <div style={s.selectWrap}>
-                    <select
-                      style={s.select}
-                      value={survivorsCount}
-                      onChange={e => setSurvivorsCount(Number(e.target.value))}
-                    >
-                      {Array.from({ length: maxSurv }, (_, i) => i + 1).map(n => (
-                        <option key={n} value={n}>{n}</option>
-                      ))}
-                    </select>
-                  </div>
-                </label>
-
-                <label style={s.settingRow}>
-                  <div>
-                    <div style={s.settingLabel}>Время обсуждения</div>
-                    <div style={s.settingHint}>Секунды на обсуждение каждого раунда</div>
-                  </div>
-                  <div style={s.selectWrap}>
-                    <select
-                      style={s.select}
-                      value={timerDuration}
-                      onChange={e => setTimerDuration(Number(e.target.value))}
-                    >
-                      <option value={60}>60 сек</option>
-                      <option value={90}>90 сек</option>
-                      <option value={120}>2 мин</option>
-                      <option value={180}>3 мин</option>
-                      <option value={300}>5 мин</option>
-                    </select>
-                  </div>
-                </label>
-              </div>
+          {/* Поддержка проекта */}
+          <div style={styles.supportCard}>
+            <div style={styles.supportText}>
+              Если вы хотите помочь нам справиться с нагрузкой и сделать игру ещё лучше — 
+              любая ваша поддержка очень важна для нас!
             </div>
-          )}
+            <button style={styles.supportBtn}>Поддержать</button>
+          </div>
 
-          {/* Кнопка старта */}
-          <div style={s.startArea}>
-            {isHost ? (
-              <>
-                <button
-                  className="btn-primary"
-                  style={s.startBtn}
-                  onClick={handleStart}
-                  disabled={!canStart}
-                >
-                  НАЧАТЬ ИГРУ
-                </button>
-                {!canStart && (
-                  <span style={s.hintText}>Нужно минимум 2 игрока</span>
-                )}
-              </>
-            ) : (
-              <div style={s.waitingHost}>
-                <span style={s.waitingDots}>●●●</span>
-                <span style={s.waitingText}>Ожидаем хоста…</span>
-              </div>
-            )}
+          {/* Telegram Bot */}
+          <div style={styles.telegramCard}>
+            <div style={styles.telegramText}>
+              Играй в Bunker Online с друзьями прямо в мессенджере — быстро, удобно и без шэпов!
+            </div>
+            <button style={styles.telegramBtn}>Перейти</button>
+          </div>
+
+          {/* Правила игры */}
+          <div style={styles.rulesCard}>
+            <div style={styles.rulesText}>
+              У нас есть определенный перечень правил игры, по этому перед началом игры рекомендуем их прочитать!
+            </div>
+            <button onClick={() => setShowRules(true)} style={styles.rulesBtn}>
+              Перейти
+            </button>
+          </div>
+
+          {/* Режимы игры */}
+          <div style={styles.modeCard}>
+            <div style={styles.modeLabel}>Выберите режим игры</div>
+            <div style={styles.modeButtons}>
+              <button 
+                className={mode === 'halloween' ? 'active' : ''}
+                style={{ ...styles.modeBtn, ...(mode === 'halloween' ? styles.modeActive : {}) }}
+                onClick={() => setMode('halloween')}
+              >
+                Halloween
+              </button>
+              <button 
+                className={mode === 'classic' ? 'active' : ''}
+                style={{ ...styles.modeBtn, ...(mode === 'classic' ? styles.modeActive : {}) }}
+                onClick={() => setMode('classic')}
+              >
+                Классика
+              </button>
+            </div>
+            <button 
+              style={styles.startBtn} 
+              onClick={handleStartGame}
+              disabled={!isHost}
+            >
+              Начать игру
+            </button>
+            <button style={styles.deleteBtn} onClick={handleDeleteRoom}>
+              Удалить
+            </button>
+          </div>
+
+          {/* Голосовой чат (предложение) */}
+          <div style={styles.voiceCard}>
+            <span>🎙️ Лучше играть с голосовым чатом</span>
+            <button style={styles.voiceBtn}>Перейти в дисплей</button>
+          </div>
+
+          {/* Чат комнаты */}
+          <div style={styles.chatCard}>
+            <div style={styles.chatHeader}>Чат комнаты</div>
+            <div style={styles.chatMessages}>
+              {messages.length === 0 ? (
+                <div style={styles.chatEmpty}>Сообщений пока нет...</div>
+              ) : (
+                messages.map(msg => (
+                  <div key={msg.id} style={styles.chatMessage}>
+                    <strong style={styles.chatName}>{msg.playerName}</strong>
+                    <span style={styles.chatText}>{msg.text}</span>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+            <div style={styles.chatInputRow}>
+              <input
+                type="text"
+                placeholder="Введите сообщение"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyPress={handleKeyPress}
+                style={styles.chatInput}
+              />
+              <button onClick={sendChatMessage} style={styles.chatSendBtn}>
+                Отправить
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
+      {/* Модалка правил */}
       <HowToPlay isOpen={showRules} onClose={() => setShowRules(false)} />
-
-      <style>{`
-        @keyframes blink {
-          0%,100% { opacity: 1; }
-          50%      { opacity: 0.3; }
-        }
-        .waiting-dots { animation: blink 1.4s ease infinite; }
-      `}</style>
     </div>
   );
 }
 
-// ─── СТИЛИ (исправлены: фон на root, container прозрачный, центрирование) ───
-const s = {
+// ─── СТИЛИ ─────────────────────────────────────────────
+const styles = {
   root: {
     minHeight: '100vh',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px 16px',
-    position: 'relative',
-    overflow: 'hidden',
-    // Фоновое изображение на весь экран
     backgroundImage: `url('/images/bg-lobby.jpg')`,
     backgroundSize: 'cover',
     backgroundPosition: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.85)',
     backgroundBlendMode: 'overlay',
-  },
-  grid: {
-    position: 'fixed', inset: 0,
-    backgroundImage: `
-      linear-gradient(rgba(240,165,0,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(240,165,0,0.03) 1px, transparent 1px)
-    `,
-    backgroundSize: '48px 48px',
-    pointerEvents: 'none',
+    padding: '20px',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   container: {
+    maxWidth: '1200px',
     width: '100%',
-    maxWidth: 600,
-    background: 'transparent', // убираем фон, чтобы не перекрывать изображение
-    border: '1px solid var(--border)',
-    position: 'relative',
-    zIndex: 1,
-    marginTop: 0,
-  },
-  header: { background: 'var(--bg)' },
-  stripe: {
-    height: 5,
-    background: 'repeating-linear-gradient(90deg, #f0a500 0, #f0a500 16px, #000 16px, #000 32px)',
-  },
-  titleRow: {
-    padding: '20px 28px',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: '24px',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
-  label: {
-    display: 'block',
-    color: 'var(--text-dim)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 10,
-    letterSpacing: '0.25em',
-    marginBottom: 4,
+  leftColumn: {
+    flex: '1.2',
+    minWidth: '280px',
+    background: 'rgba(20,20,30,0.8)',
+    backdropFilter: 'blur(10px)',
+    borderRadius: '12px',
+    padding: '20px',
+    border: '1px solid var(--border)',
+  },
+  rightColumn: {
+    flex: '2',
+    minWidth: '320px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  header: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+    borderBottom: '1px solid var(--amber)',
+    marginBottom: '20px',
+    paddingBottom: '8px',
   },
   title: {
-    color: 'var(--amber)',
-    fontSize: 32,
-    fontWeight: 700,
-    letterSpacing: '0.1em',
-    textShadow: '0 0 30px rgba(240,165,0,0.4)',
-  },
-  statusBadge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    background: 'var(--surface2)',
-    border: '1px solid var(--green-dim)',
-    padding: '6px 14px',
     fontFamily: 'var(--font-head)',
-    fontSize: 12,
-    letterSpacing: '0.15em',
+    fontSize: '28px',
+    color: 'var(--amber)',
+    margin: 0,
+  },
+  version: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    color: 'var(--text-dim)',
+  },
+  playersList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '6px',
+    maxHeight: 'calc(100vh - 150px)',
+    overflowY: 'auto',
+    paddingRight: '6px',
+  },
+  playerSlot: {
+    padding: '8px 12px',
+    background: 'var(--surface2)',
+    border: '1px solid var(--border)',
+    borderRadius: '6px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '14px',
+    color: 'var(--text)',
+  },
+  playerName: {
+    flex: 1,
+  },
+  hostBadge: {
+    color: 'var(--amber)',
+    marginLeft: '6px',
+    fontSize: '12px',
+  },
+  youBadge: {
+    background: 'var(--green-dim)',
     color: 'var(--green)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    fontSize: '10px',
+    marginLeft: '8px',
   },
-  dot: {
-    width: 8, height: 8,
-    borderRadius: '50%',
-    background: 'var(--green)',
-    boxShadow: '0 0 6px var(--green)',
-    display: 'inline-block',
-    animation: 'blink 1.4s ease infinite',
+  emptySlot: {
+    color: 'var(--text-dim)',
+    fontStyle: 'italic',
   },
-  body: { padding: '24px 28px', display: 'flex', flexDirection: 'column', gap: 24 },
-  roomCodeCard: {
+  roomCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+  },
+  roomUrl: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    color: 'var(--amber)',
+    cursor: 'pointer',
+    wordBreak: 'break-all',
+    marginBottom: '8px',
+    textDecoration: 'underline',
+  },
+  roomCodeRow: {
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: '8px',
     flexWrap: 'wrap',
-    gap: 10,
-    background: 'var(--surface2)',
-    border: '1px solid var(--amber)',
-    padding: '14px 18px',
-    borderRadius: '4px',
-    marginBottom: '8px',
   },
   roomCodeLabel: {
     fontFamily: 'var(--font-head)',
-    fontSize: 12,
+    fontSize: '12px',
     color: 'var(--text-dim)',
-    letterSpacing: '0.1em',
   },
-  roomCodeValue: {
+  roomCode: {
     fontFamily: 'var(--font-mono)',
-    fontSize: 24,
+    fontSize: '18px',
     fontWeight: 'bold',
     color: 'var(--amber)',
-    letterSpacing: '0.1em',
-    flex: 1,
-    textAlign: 'center',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: 8,
+    letterSpacing: '1px',
   },
   copyBtn: {
-    background: 'var(--surface3)',
-    border: '1px solid var(--border)',
-    color: 'var(--amber)',
-    fontFamily: 'var(--font-head)',
-    fontSize: 12,
-    padding: '6px 12px',
-    cursor: 'pointer',
-    transition: '0.1s',
-    borderRadius: '4px',
-  },
-  leaveBtn: {
     background: 'transparent',
-    border: '1px solid var(--red)',
-    color: 'var(--red)',
-    fontFamily: 'var(--font-head)',
-    fontSize: 12,
-    padding: '6px 12px',
-    cursor: 'pointer',
-    borderRadius: '4px',
-    transition: '0.1s',
-  },
-  rulesBtn: {
-    background: 'transparent',
-    border: '1px solid var(--amber)',
-    color: 'var(--amber)',
-    fontFamily: 'var(--font-head)',
-    fontSize: 12,
-    padding: '6px 12px',
-    cursor: 'pointer',
-    borderRadius: '4px',
-  },
-  section: { display: 'flex', flexDirection: 'column', gap: 12 },
-  sectionHead: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitle: {
-    color: 'var(--text-dim)',
-    fontFamily: 'var(--font-head)',
-    fontSize: 11,
-    letterSpacing: '0.22em',
-    textTransform: 'uppercase',
-  },
-  count: {
-    color: 'var(--amber)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 13,
-  },
-  playerGrid: { display: 'flex', flexDirection: 'column', gap: 6 },
-  playerRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    padding: '10px 14px',
-    border: '1px solid',
-    transition: 'border-color 0.2s',
-  },
-  playerNum: {
-    color: 'var(--text-dim)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 12,
-    flexShrink: 0,
-    width: 22,
-  },
-  playerName: {
-    fontFamily: 'var(--font-head)',
-    fontSize: 16,
-    fontWeight: 600,
-    letterSpacing: '0.05em',
-    flex: 1,
-  },
-  playerBadges: { display: 'flex', gap: 6 },
-  badgeHost: {
-    background: 'rgba(240,165,0,0.15)',
-    border: '1px solid var(--amber-dim)',
-    color: 'var(--amber)',
-    fontFamily: 'var(--font-head)',
-    fontSize: 10,
-    letterSpacing: '0.1em',
-    padding: '2px 8px',
-  },
-  badgeMe: {
-    background: 'rgba(0,204,102,0.1)',
-    border: '1px solid var(--green-dim)',
-    color: 'var(--green)',
-    fontFamily: 'var(--font-head)',
-    fontSize: 10,
-    letterSpacing: '0.1em',
-    padding: '2px 8px',
-  },
-  emptySlot: {
-    padding: '10px 14px',
-    border: '1px dashed var(--border)',
-    display: 'flex',
-    alignItems: 'center',
-  },
-  emptyText: { color: 'var(--text-dim)', fontFamily: 'var(--font-mono)', fontSize: 12 },
-  settings: { display: 'flex', flexDirection: 'column', gap: 12 },
-  settingRow: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '14px 16px',
-    background: 'var(--surface2)',
     border: '1px solid var(--border)',
-    cursor: 'default',
-    gap: 16,
+    borderRadius: '4px',
+    padding: '4px 8px',
+    cursor: 'pointer',
+    fontSize: '12px',
   },
-  settingLabel: {
-    fontFamily: 'var(--font-head)',
-    fontSize: 14,
-    color: 'var(--text-bright)',
-    letterSpacing: '0.05em',
-    marginBottom: 2,
+  supportCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
   },
-  settingHint: {
+  supportText: {
     fontFamily: 'var(--font-mono)',
-    fontSize: 11,
-    color: 'var(--text-dim)',
+    fontSize: '12px',
+    lineHeight: '1.4',
+    color: 'var(--text)',
   },
-  selectWrap: { flexShrink: 0 },
-  select: {
+  supportBtn: {
+    background: 'var(--amber)',
+    color: '#000',
+    border: 'none',
+    padding: '8px 16px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    alignSelf: 'flex-start',
+  },
+  telegramCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  telegramText: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    color: 'var(--text)',
+  },
+  telegramBtn: {
     background: 'var(--surface3)',
     border: '1px solid var(--border-hi)',
     color: 'var(--amber)',
+    padding: '8px 16px',
     fontFamily: 'var(--font-head)',
-    fontSize: 14,
-    fontWeight: 700,
-    padding: '6px 12px',
+    fontSize: '12px',
     cursor: 'pointer',
-    outline: 'none',
-    letterSpacing: '0.05em',
+    borderRadius: '4px',
+    alignSelf: 'flex-start',
   },
-  startArea: {
+  rulesCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px 16px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: 8,
+    gap: '8px',
+  },
+  rulesText: {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    color: 'var(--text)',
+  },
+  rulesBtn: {
+    background: 'var(--surface3)',
+    border: '1px solid var(--border-hi)',
+    color: 'var(--amber)',
+    padding: '8px 16px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    alignSelf: 'flex-start',
+  },
+  modeCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  modeLabel: {
+    fontFamily: 'var(--font-head)',
+    fontSize: '14px',
+    color: 'var(--text-bright)',
+  },
+  modeButtons: {
+    display: 'flex',
+    gap: '12px',
+  },
+  modeBtn: {
+    background: 'transparent',
+    border: '1px solid var(--border)',
+    color: 'var(--text)',
+    padding: '6px 16px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '12px',
+    cursor: 'pointer',
+    borderRadius: '20px',
+  },
+  modeActive: {
+    background: 'var(--amber)',
+    color: '#000',
+    borderColor: 'var(--amber)',
   },
   startBtn: {
+    background: 'var(--green)',
+    color: '#000',
+    border: 'none',
+    padding: '10px 20px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '14px',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    borderRadius: '4px',
     width: '100%',
-    padding: '14px',
-    fontSize: 16,
-    letterSpacing: '0.15em',
-    borderRadius: 0,
   },
-  hintText: {
-    color: 'var(--text-dim)',
-    fontFamily: 'var(--font-mono)',
-    fontSize: 12,
+  deleteBtn: {
+    background: 'var(--red)',
+    color: '#fff',
+    border: 'none',
+    padding: '8px 16px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
+    width: '100%',
   },
-  waitingHost: {
+  voiceCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
+    padding: '12px 16px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: '8px',
+  },
+  voiceBtn: {
+    background: 'transparent',
+    border: '1px solid var(--amber)',
+    color: 'var(--amber)',
+    padding: '6px 12px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
+  },
+  chatCard: {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: '8px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
-    gap: 8,
-    padding: '16px 0',
+    maxHeight: '300px',
   },
-  waitingDots: {
-    color: 'var(--amber)',
+  chatHeader: {
+    padding: '12px 16px',
+    borderBottom: '1px solid var(--border)',
     fontFamily: 'var(--font-head)',
-    fontSize: 22,
-    letterSpacing: '8px',
-    animation: 'blink 1.4s ease infinite',
+    fontSize: '14px',
+    color: 'var(--text-bright)',
+    background: 'var(--surface2)',
+    borderTopLeftRadius: '8px',
+    borderTopRightRadius: '8px',
   },
-  waitingText: {
+  chatMessages: {
+    flex: 1,
+    overflowY: 'auto',
+    padding: '12px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+    maxHeight: '200px',
+  },
+  chatEmpty: {
     color: 'var(--text-dim)',
+    textAlign: 'center',
+    fontStyle: 'italic',
+  },
+  chatMessage: {
+    fontSize: '12px',
     fontFamily: 'var(--font-mono)',
-    fontSize: 13,
+    wordBreak: 'break-word',
+  },
+  chatName: {
+    color: 'var(--amber)',
+    marginRight: '8px',
+  },
+  chatText: {
+    color: 'var(--text)',
+  },
+  chatInputRow: {
+    display: 'flex',
+    borderTop: '1px solid var(--border)',
+    padding: '8px',
+    gap: '8px',
+  },
+  chatInput: {
+    flex: 1,
+    background: 'var(--surface3)',
+    border: '1px solid var(--border)',
+    padding: '8px',
+    color: 'var(--text)',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+    borderRadius: '4px',
+  },
+  chatSendBtn: {
+    background: 'var(--amber)',
+    border: 'none',
+    padding: '8px 16px',
+    fontFamily: 'var(--font-head)',
+    fontSize: '12px',
+    cursor: 'pointer',
+    borderRadius: '4px',
   },
 };

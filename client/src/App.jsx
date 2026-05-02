@@ -197,9 +197,15 @@ const actions = {
     socket.emit('joinRoom', { roomId: code });
   },
   join: (name) => socket.emit('joinGame', { name }),
-  startGame: (survivorsCount, timerDuration) => {
-    socket.emit('startGame', { survivorsCount, timerDuration });
-  },
+startGame: (mode) => {
+  let survivorsCount = 2;
+  let timerDuration = 120;
+  if (mode === 'halloween') {
+    survivorsCount = 3;
+    timerDuration = 150;
+  }
+  socket.emit('startGame', { survivorsCount, timerDuration });
+},
   openCard: (cardType) => socket.emit('openCard', { cardType }),
   vote: (targetId) => socket.emit('vote', { targetId }),
   requestForceVoting: () => socket.emit('requestForceVoting'),
