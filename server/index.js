@@ -359,7 +359,7 @@ io.on('connection', (socket) => {
     if (!state) return;
     const player = state.players.get(socket.id);
     if (!player || player.status !== 'alive') return;
-    if (state.phase !== 'discussion') return;
+   
     const msg = (text || '').trim().slice(0, 280);
     if (!msg) return;
     io.to(currentRoomId).emit('chatMessage', {
