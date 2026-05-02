@@ -5,7 +5,7 @@ export default function Lobby({
   players, playerId, isHost, roomId, 
   onStart, onLeave, messages, onSendChat 
 }) {
-  const [mode, setMode] = useState('classic');
+  const [mode] = useState('classic');
   const [chatInput, setChatInput] = useState('');
   const [showRules, setShowRules] = useState(false);
   const chatEndRef = useRef(null);
@@ -24,8 +24,6 @@ export default function Lobby({
   const sendChatMessage = () => {
     const txt = chatInput.trim();
     if (!txt) return;
-
-    console.log("SEND:", txt); // для проверки
     onSendChat?.(txt);
     setChatInput('');
   };
@@ -52,45 +50,69 @@ export default function Lobby({
           </div>
 
           <div style={styles.playersGrid}>
-            {playerSlots.map((player, idx) => (
-              <div key={idx} style={styles.playerSlot}>
-                
-                <div style={styles.playerInfo}>
-                  <span style={styles.playerIndex}>
-                    Игрок {idx + 1}
-                  </span>
+            {playerSlots.map((player, idx) => {
+              const isYou = player?.id === playerId;
+              const isHostPlayer = player?.isHost;
+              const isReady = player?.ready; // ⚠️ ожидается поле ready
 
-                  {player ? (
-                    <span style={styles.playerName}>
-                      {player.name}
-                      {player.isHost && <span style={styles.hostBadge}> 👑</span>}
-                    </span>
-                  ) : (
-                    <span style={styles.emptySlot}>Пустой слот</span>
+              return (
+                <div 
+                  key={idx} 
+                  style={{
+                    ...styles.playerSlot,
+                    animation: `fadeIn 0.4s ease ${idx * 0.05}s both`
+                  }}
+                >
+
+                  <div style={styles.playerLeft}>
+                    <div style={styles.plusIcon}>
+                      {player ? '' : '+'}
+                    </div>
+
+                    <div style={styles.playerInfo}>
+                      <span style={styles.playerIndex}>
+                        Игрок {idx + 1}
+                      </span>
+
+                      {player ? (
+                        <span style={styles.playerName}>
+                          {player.name}
+                          {isHostPlayer && <span style={styles.hostBadge}> 👑</span>}
+                        </span>
+                      ) : (
+                        <span style={styles.emptySlot}>Пустой слот</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ПРАВАЯ ЧАСТЬ СТАТУС */}
+                  {player && (
+                    <div style={styles.statusBlock}>
+                      <span style={{
+                        ...styles.status,
+                        ...(isReady ? styles.ready : styles.notReady)
+                      }}>
+                        {isReady ? 'Готов' : 'Не готов'}
+                      </span>
+
+                      {isYou && <span style={styles.youBadge}>Вы</span>}
+                    </div>
                   )}
                 </div>
-
-                {player?.id === playerId && (
-                  <span style={styles.youBadge}>Вы</span>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
         {/* ПРАВАЯ ЧАСТЬ */}
         <div style={styles.rightColumn}>
 
-          {/* 🔑 КОД КОМНАТЫ */}
+          {/* КОД КОМНАТЫ */}
           <div style={styles.roomCard}>
             <div style={styles.roomLabel}>Код комнаты</div>
-
             <div style={styles.roomCodeRow}>
               <span style={styles.roomCode}>{roomId}</span>
-
-              <button onClick={copyRoom} style={styles.copyBtn}>
-                📋
-              </button>
+              <button onClick={copyRoom} style={styles.copyBtn}>📋</button>
             </div>
           </div>
 
@@ -99,23 +121,7 @@ export default function Lobby({
             <div style={styles.modeLabel}>Режим игры</div>
 
             <div style={styles.modeButtons}>
-              <button 
-                style={{
-                  ...styles.modeBtn,
-                  ...(mode === 'halloween' ? styles.modeActive : {})
-                }}
-                onClick={() => setMode('halloween')}
-              >
-                Halloween
-              </button>
-
-              <button 
-                style={{
-                  ...styles.modeBtn,
-                  ...(mode === 'classic' ? styles.modeActive : {})
-                }}
-                onClick={() => setMode('classic')}
-              >
+              <button style={{ ...styles.modeBtn, ...styles.modeActive }}>
                 Классика
               </button>
             </div>
@@ -128,10 +134,7 @@ export default function Lobby({
               Начать игру
             </button>
 
-            <button 
-              style={styles.deleteBtn}
-              onClick={onLeave}
-            >
+            <button style={styles.deleteBtn} onClick={onLeave}>
               Удалить
             </button>
           </div>
@@ -158,7 +161,7 @@ export default function Lobby({
               <input
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
-                onKeyDown={handleKeyDown} // ✅ исправлено
+                onKeyDown={handleKeyDown}
                 placeholder="Сообщение..."
                 style={styles.chatInput}
               />
@@ -200,10 +203,6 @@ const styles = {
     gap: '16px',
   },
 
-  header: {
-    marginBottom: '20px',
-  },
-
   title: {
     fontSize: '32px',
     color: '#f5a623',
@@ -211,18 +210,36 @@ const styles = {
 
   playersGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
-    gap: '14px',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '18px',
   },
 
   playerSlot: {
-    padding: '14px 16px',
-    borderRadius: '10px',
-    background: 'linear-gradient(180deg, rgba(255,255,255,0.05), rgba(0,0,0,0.5))',
-    border: '1px solid rgba(255,255,255,0.08)',
+    padding: '18px 20px',
+    borderRadius: '14px',
+    background: 'linear-gradient(90deg, rgba(255,255,255,0.08), rgba(0,0,0,0.6))',
+    border: '1px solid rgba(255,255,255,0.06)',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
+    minHeight: '70px',
+  },
+
+  playerLeft: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+  },
+
+  plusIcon: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    border: '1px solid rgba(255,255,255,0.2)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: '#aaa',
   },
 
   playerInfo: {
@@ -231,17 +248,43 @@ const styles = {
   },
 
   playerIndex: {
-    fontSize: '12px',
+    fontSize: '13px',
     color: 'rgba(255,255,255,0.4)',
   },
 
   playerName: {
-    fontSize: '16px',
+    fontSize: '18px',
     color: '#fff',
+  },
+
+  emptySlot: {
+    color: 'rgba(255,255,255,0.35)',
   },
 
   hostBadge: {
     color: '#f5a623',
+  },
+
+  statusBlock: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+
+  status: {
+    fontSize: '13px',
+    padding: '4px 10px',
+    borderRadius: '6px',
+  },
+
+  ready: {
+    background: '#1f7a4c',
+    color: '#22c55e',
+  },
+
+  notReady: {
+    background: '#3a1111',
+    color: '#ef4444',
   },
 
   youBadge: {
@@ -251,11 +294,6 @@ const styles = {
     borderRadius: '4px',
   },
 
-  emptySlot: {
-    color: 'rgba(255,255,255,0.3)',
-  },
-
-  // 🔑 КОМНАТА
   roomCard: {
     background: '#111318',
     borderRadius: '10px',
@@ -270,13 +308,11 @@ const styles = {
   roomCodeRow: {
     display: 'flex',
     justifyContent: 'space-between',
-    alignItems: 'center',
   },
 
   roomCode: {
     fontSize: '22px',
     color: '#f5a623',
-    fontWeight: 'bold',
   },
 
   copyBtn: {
@@ -284,33 +320,17 @@ const styles = {
     border: '1px solid #333',
     color: '#fff',
     padding: '6px 10px',
-    cursor: 'pointer',
   },
 
   modeCard: {
     padding: '16px',
     borderRadius: '10px',
     background: '#111318',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '10px',
-  },
-
-  modeLabel: {
-    fontSize: '14px',
-    color: '#aaa',
-  },
-
-  modeButtons: {
-    display: 'flex',
-    gap: '10px',
   },
 
   modeBtn: {
-    flex: 1,
     padding: '8px',
     border: '1px solid #333',
-    background: 'transparent',
     color: '#fff',
   },
 
@@ -323,7 +343,6 @@ const styles = {
     background: '#22c55e',
     padding: '10px',
     border: 'none',
-    cursor: 'pointer',
   },
 
   deleteBtn: {
@@ -331,7 +350,6 @@ const styles = {
     padding: '10px',
     border: 'none',
     color: '#fff',
-    cursor: 'pointer',
   },
 
   chatCard: {
@@ -353,20 +371,6 @@ const styles = {
     padding: '10px',
   },
 
-  chatMessage: {
-    fontSize: '14px',
-  },
-
-  chatName: {
-    color: '#f5a623',
-    marginRight: '6px',
-  },
-
-  chatEmpty: {
-    textAlign: 'center',
-    color: '#666',
-  },
-
   chatInputRow: {
     display: 'flex',
     borderTop: '1px solid #222',
@@ -375,15 +379,12 @@ const styles = {
   chatInput: {
     flex: 1,
     background: '#0b0d10',
-    border: 'none',
-    padding: '10px',
     color: '#fff',
+    padding: '10px',
   },
 
   chatSendBtn: {
-    padding: '10px',
     background: '#f5a623',
-    border: 'none',
-    cursor: 'pointer',
+    padding: '10px',
   },
 };
